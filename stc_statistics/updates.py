@@ -1,4 +1,4 @@
-"""Version checks and browser downloads. Never installs or replaces running code."""
+"""Release checks plus verified in-app patch downloads and restart recovery."""
 import json
 from pathlib import Path
 import re
@@ -7,12 +7,28 @@ from urllib.parse import urlsplit
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QTextBrowser
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QTextBrowser, QProgressBar
 from .theme import GlassButton
 from .version import APP_VERSION
 
 CONFIG_PATH = Path(__file__).resolve().parent / 'update_config.json'
 MAX_FEED_BYTES = 256 * 1024
+
+from .i18n import TEXT
+for key,en,fr in [
+    ('install_update','Update app','Mettre à jour l’application'),
+    ('cancel_update','Cancel download','Annuler le téléchargement'),
+    ('update_downloading','Downloading the update…','Téléchargement de la mise à jour…'),
+    ('update_verifying','Verifying the update…','Vérification de la mise à jour…'),
+    ('update_saving','Saving your workspace…','Enregistrement de votre espace de travail…'),
+    ('update_installing','Installing and restarting…','Installation et redémarrage…'),
+    ('update_cancelled','Update cancelled. Your app has not changed.','Mise à jour annulée. Votre application est inchangée.'),
+    ('update_wait_idle','Finish the running calculation or import before updating.','Terminez le calcul ou l’importation avant la mise à jour.'),
+    ('update_restored','Update finished. Your workspace has been restored.','Mise à jour terminée. Votre espace de travail a été restauré.'),
+    ('update_rolled_back','The update failed. The previous app and your workspace have been restored.','La mise à jour a échoué. L’ancienne application et votre espace de travail ont été restaurés.')]:
+    TEXT['en'][key],TEXT['fr'][key]=en,fr
+TEXT['en']['update_instructions']='Click Check for updates, then Update app. The download runs here with progress. Your data, notebook cells, results and settings are saved before installation. The app restarts and restores the workspace. Failed startup triggers rollback. Legacy full releases open in your browser.'
+TEXT['fr']['update_instructions']='Cliquez sur Vérifier les mises à jour, puis Mettre à jour l’application. Le téléchargement affiche sa progression ici. Les données, cellules, résultats et réglages sont enregistrés avant l’installation. L’application redémarre et restaure votre travail. Un échec au démarrage déclenche une restauration. Les anciennes versions complètes s’ouvrent dans le navigateur.'
 
 
 def version_tuple(value):
@@ -42,7 +58,17 @@ def parse_manifest(payload):
     notes = payload.get('release_notes', '')
     if not isinstance(notes, str):
         raise ValueError('Invalid release notes.')
-    return {'version': payload['version'], 'download_url': payload['download_url'], 'release_notes': notes[:12000]}
+    result={'version': payload['version'], 'download_url': payload['download_url'], 'release_notes': notes[:12000]}
+    if payload.get('package_type') is not None:
+        from .update_installer import FORMAT, MAX_PACKAGE
+        url=urlsplit(payload['download_url'])
+        if (payload['package_type']!=FORMAT or not isinstance(payload.get('sha256'),str) or not re.fullmatch(r'[a-fA-F0-9]{64}',payload.get('sha256',''))
+                or type(payload.get('size_bytes')) is not int or not 0<payload['size_bytes']<=MAX_PACKAGE
+                or url.hostname!='github.com'
+                or not url.path.startswith('/SystemTechnologiesCompany/STC-Statistics/releases/download/')):
+            raise ValueError('Invalid patch metadata or untrusted release URL')
+        result.update(package_type=FORMAT,sha256=payload['sha256'].lower(),size_bytes=payload['size_bytes'])
+    return result
 
 
 def load_config(path=CONFIG_PATH):
@@ -88,6 +114,12 @@ class UpdatesPage(QWidget):
         controls.addWidget(self.download_button)
         controls.addStretch()
         content.addLayout(controls)
+        self.progress=QProgressBar()
+        self.progress.setRange(0,100)
+        self.progress.setFormat('%p%')
+        self.progress.setStyleSheet('QProgressBar {border:1px solid #8a968f; border-radius:7px; background:#121a17; min-height:18px; text-align:center; color:#e8ece9;} QProgressBar::chunk {background:#3fbf7f; border-radius:6px;}')
+        self.progress.hide()
+        content.addWidget(self.progress)
         self.notes = QTextBrowser()
         self.notes.setOpenExternalLinks(False)
         self.notes.setMaximumHeight(140)
@@ -109,27 +141,32 @@ class UpdatesPage(QWidget):
         instructions.addWidget(self.website_button)
         layout.addWidget(how)
         layout.addStretch()
+        from .update_flow import UpdateFlow
+        self.flow=UpdateFlow(self)
         self.translate()
 
     def translate(self):
         self.installed.setText(f"{self.app.t('installed_version')}  {APP_VERSION}")
         self.check_button.setText(self.app.t('check_updates'))
-        self.download_button.setText(self.app.t('download_update'))
+        self.download_button.setText(self.app.t('install_update') if self.latest and self.latest.get('package_type') else self.app.t('download_update'))
         self.how_title.setText(self.app.t('how_update'))
         self.how_text.setText(self.app.t('update_instructions'))
         self.website_button.setText(self.app.t('visit_stc'))
         message = self.app.t(self.state)
         if self.latest:
             message += '\n' + self.app.t('latest_version') + ' ' + self.latest['version']
+        if self.flow.error and self.state=='updates_failed':
+            message += '\n' + self.flow.error
         self.status.setText(message)
-        self.check_button.setEnabled(bool(self.config.get('manifest_url')) and self.reply is None)
-        self.download_button.setEnabled(valid_https_url(self.download_url) and self.reply is None)
+        self.check_button.setEnabled(bool(self.config.get('manifest_url')) and self.reply is None and not self.flow.busy)
+        self.download_button.setEnabled(valid_https_url(self.download_url) and self.reply is None and not self.flow.busy)
 
     def check(self):
         url = self.config.get('manifest_url', '')
-        if self.reply is not None or not valid_https_url(url):
+        if self.reply is not None or self.flow.busy or not valid_https_url(url):
             return
         self.state = 'updates_checking'
+        self.flow.error=''
         request = QNetworkRequest(QUrl(url))
         request.setRawHeader(b'Accept', b'application/json')
         request.setRawHeader(b'User-Agent', f'STC-Statistics/{APP_VERSION}'.encode())
@@ -163,6 +200,9 @@ class UpdatesPage(QWidget):
             self.translate()
 
     def download(self):
+        if self.latest and self.latest.get('package_type'):
+            self.flow.start(self.latest)
+            return
         if valid_https_url(self.download_url):
             if not QDesktopServices.openUrl(QUrl(self.download_url)):
                 self.state = 'updates_failed'

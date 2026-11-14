@@ -49,7 +49,7 @@ def choose(app, title, entries):
 
 
 def guard(app, fn):
-    if app.active or (app.loader and app.loader.isRunning()):
+    if getattr(app,'updating',False) or app.active or (app.loader and app.loader.isRunning()):
         return
     try:
         return fn()
@@ -165,26 +165,32 @@ def chart_options(app):
         app.mark_dirty()
 
 
-def project_save(app):
+def project_save(app, path=None, set_current=True):
     from .projects import save_project
     if app.data_sync_error:
         raise ValueError('Resolve the notebook DataSyncError before saving / Corrigez DataSyncError avant de sauvegarder')
-    path,_ = QFileDialog.getSaveFileName(app,'STC project',app.project_path or 'STC_Project.stcproj','STC (*.stcproj)')
+    if path is None:
+        path,_ = QFileDialog.getSaveFileName(app,'STC project',app.project_path or 'STC_Project.stcproj','STC (*.stcproj)')
     if not path:
         return False
     if not path.lower().endswith('.stcproj'):
         path += '.stcproj'
     notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(c.editor.toPlainText(),outputs=c.outputs,execution_count=c.execution_count,metadata={'stc_executed_source':c.executed_source}) for c in app.cells])
-    save_project(path, app.frame,notebook,{'chart':app.chart_options,'language':app.language,'metrics':app.stats_metrics,'ddof':app.stats_ddof,'percentiles':app.stats_percentiles,'columns':app.selected_columns(),'report':app.report_plan})
-    app.project_path = path
-    app.dirty = False
+    settings={'chart':app.chart_options,'language':app.language,'metrics':app.stats_metrics,'ddof':app.stats_ddof,'percentiles':app.stats_percentiles,'columns':app.selected_columns(),'report':app.report_plan}
+    if hasattr(app,'_update_recovery'):
+        settings['_update_recovery']=app._update_recovery
+    save_project(path, app.frame,notebook,settings)
+    if set_current:
+        app.project_path = path
+        app.dirty = False
     app.statusBar().showMessage(app.t('saved')+': '+path)
     return True
 
 
-def project_open(app):
+def project_open(app, path=None, restore_recovery=False):
     from .projects import load_project
-    path,_ = QFileDialog.getOpenFileName(app,'STC project','','STC (*.stcproj)')
+    if path is None:
+        path,_ = QFileDialog.getOpenFileName(app,'STC project','','STC (*.stcproj)')
     if not path:
         return
     frame,notebook,settings = load_project(path)
@@ -238,6 +244,25 @@ def project_open(app):
     app.language_picker.setCurrentIndex(1 if settings.get('language')=='fr' else 0)
     app.dirty = False
     app.navigate('data')
+    if restore_recovery and settings.get('_update_recovery'):
+        state=settings['_update_recovery']
+        app.project_path=state.get('project_path')
+        app.file_path=state.get('file_path')
+        app.dirty=bool(state.get('dirty'))
+        for cell,position in zip(app.cells,state.get('cursors',[])):
+            cursor=cell.editor.textCursor()
+            cursor.setPosition(min(int(position),len(cell.editor.toPlainText())))
+            cell.editor.setTextCursor(cursor)
+        for checkbox,value in zip((app.report_tables,app.report_graphs,app.report_text,app.report_code),state.get('report_flags',[])):
+            checkbox.setChecked(bool(value))
+        if state.get('page')=='charts':
+            for cell in reversed(app.cells):
+                if any('image/png' in o.get('data',{}) for o in cell.outputs):
+                    app.show_cell_charts(cell)
+                    break
+        if state.get('page') in app.nav_buttons:
+            app.navigate(state['page'])
+        app.update_info()
 
 
 def report_builder(app):

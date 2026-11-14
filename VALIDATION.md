@@ -1,5 +1,16 @@
 # Validation status
 
+## Version 0.5.1 updater — 14 November 2026
+
+- PASS: all 52 unittest checks completed with exit code 0. Twelve new patch checks cover archive/checksum validation, trusted release metadata, install locks, directory swap failure, startup rollback, in-app progress/checkpoint/restart dispatch, cancellation, corrupted downloads, checkpoint-write failure, installer-start failure and transient Windows file locks.
+- PASS: the real Qt download controller (with a simulated network reply) launched the separate installer, waited for readiness, exited its actual process and reopened the real private-runtime app with the dataset, code, printed output and unsaved state restored. This also verifies the Windows parent-process wait/handshake. The EXE stayed byte-identical.
+- PASS: actual bundled-runtime installation 0.5.0 → 0.5.1 → 0.5.2, each followed by real Qt startup and recovery of a saved three-row dataset, notebook cell/results and unsaved workspace state.
+- PASS: an intentionally broken 0.5.3 startup triggered rollback to 0.5.2; the recovery project stayed byte-identical. Diagnostic failure artifacts remain under .tmp and must not be published.
+- PASS: the existing EXE SHA-256 remained 01e259e9540517130ad35ec27a1a03cc6dccf36e10a1b43471d897018a121ae8. No executable rebuild or replacement was performed.
+- PASS: rendered/inspected the Updates progress page in English and French at 1350 × 738; checked the activation script's already-enabled path against the real test runtime.
+- Network tests use simulated Qt replies. The GitHub Release assets have not been published by this work, so live GitHub download testing remains pending publication.
+- Recovery includes df, notebook code/results and desktop settings. Arbitrary live kernel objects are not serialized. Patches retain the existing Python and installed libraries. Old code, workspace checkpoints and installer status/logs are retained for rollback/recovery.
+
 ## Version 0.5.0 — 14 November 2026
 
 - PASS: rebuilt 0.5.0 Windows EXE and launched it with external Python paths removed. Its bundled runtime passed GUI, advanced statistics, typed projects, graph and Word/Excel export diagnostics.

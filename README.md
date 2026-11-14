@@ -6,6 +6,8 @@ The interface uses STC's verified website palette: #0A0F0D background, #121A17 s
 
 ## Workspace pages / Pages de travail
 
+**0.5.1 updater:** in-app progress, verified application-code patches, automatic workspace recovery and startup rollback are implemented. The existing EXE is unchanged. Activate once using `Enable_In_App_Updates.ps1`, then publish the prepared 0.5.2 test assets to GitHub Releases. See [GITHUB_UPDATES.md](GITHUB_UPDATES.md) for the exact steps and supported recovery scope.
+
 Version 0.5 adds seven integrated tools:
 
 | Tool | Where to find it |
@@ -95,22 +97,13 @@ Histograms keep 15 bins and show at most four variables per figure. Tick density
 
 ## Updating and publishing releases
 
-The Updates page is available in English and French. Checks happen only when requested. The download button opens a configured HTTPS ZIP link in the default browser; it does not execute an installer or replace a running application. Save notebooks, close the app, extract a new release into a new folder, run Setup.cmd, then Start.cmd.
+Application updates now use the in-app downloader and recovery workflow described in [GITHUB_UPDATES.md](GITHUB_UPDATES.md). Activate the updater once with Enable_In_App_Updates.ps1; future updates run from the Updates page in English or French.
 
-Public release hosting is not configured in this prototype. `stc_statistics/update_config.json` contains empty `manifest_url` and `download_url` settings. The app explicitly shows this state and keeps unavailable actions disabled. STC must publish a ZIP and optionally an `update.json` feed before those actions can be connected. These are ordinary public HTTPS links; no account keys belong in the config.
+Use make_patch.py for ordinary app-code updates. It generates a ZIP and update.json containing the exact target version, compatible source versions, SHA-256 and download size. Publish both assets under their matching GitHub Release tag. The app downloads the patch internally, validates it, saves the workspace, installs it after exiting, and reopens the saved work. Startup failure triggers rollback.
 
-Publisher workflow:
+The existing make_release.py remains for complete source releases and explicitly requested full Windows distributions. It is not the app-patch builder. Do not rebuild the EXE for routine changes.
 
-1. Set the new release version in `stc_statistics/version.py` using `major.minor.patch`.
-2. Run `.venv\Scripts\python.exe make_release.py --download-url "PUBLIC_HTTPS_ZIP_URL" --feed-url "PUBLIC_HTTPS_UPDATE_JSON_URL" --notes "Release notes"`, replacing both placeholders with real hosting URLs.
-3. Upload the generated `releases/STC_Statistics_VERSION.zip` and `releases/update.json` to those exact URLs. Nothing is uploaded by the script.
-4. The generated ZIP contains the update-source settings for future checks. For the current development copy, set the same addresses in `stc_statistics/update_config.json` and restart.
-
-For Windows executable releases, configure `update_config.json` **before** building, run Build_EXE.cmd, then add `--windows-exe` to the publishing command. This packages the EXE rather than source scripts. The publisher verifies that its feed URLs and version match the recorded executable build.
-
-The release feed includes a version, HTTPS download URL, release notes and package SHA-256. The current app compares numeric versions and opens the download in the browser; it does not yet verify the downloaded archive's hash or auto-install it. Keep the feed URL stable across releases and publish the ZIP before its feed entry.
-
-La page Mises à jour ne remplace pas l’application ouverte. Les liens publics sont encore à configurer par STC. Le script de publication prépare le ZIP et le fichier de version, sans les mettre en ligne. Enregistrez vos notebooks, fermez l’application, extrayez la nouvelle version dans un nouveau dossier, puis lancez Setup.cmd et Start.cmd.
+En français : activez une seule fois les mises à jour intégrées avec Enable_In_App_Updates.ps1. Ensuite, la page Mises à jour télécharge le correctif, affiche sa progression, sauvegarde le travail, installe et redémarre l’application. Une erreur au démarrage déclenche le retour à la version précédente.
 
 ## Scope
 

@@ -778,6 +778,10 @@ class MainWindow(QMainWindow):
         return self.save_project() if answer == QMessageBox.StandardButton.Save else True
 
     def closeEvent(self, event):
+        if not getattr(self,'_update_exit',False) and self.updates_page.flow.busy:
+            self.updates_page.flow.cancel()
+            event.ignore()
+            return
         if self.active or (self.loader and self.loader.isRunning()):
             self.stop()
             event.ignore()
@@ -796,5 +800,24 @@ def main():
     app.setStyle("Fusion")
     app.setStyleSheet(STYLE)
     window = MainWindow()
+    if '--restore-workspace' in sys.argv:
+        from .workbench import project_open
+        project_open(window,path=sys.argv[sys.argv.index('--restore-workspace')+1],restore_recovery=True)
+        window.statusBar().showMessage(window.t('update_rolled_back' if '--update-reverted' in sys.argv else 'update_restored'))
     window.show()
+    if '--update-health' in sys.argv:
+        from PySide6.QtCore import QTimer
+        from .update_installer import atomic_json
+        from .version import APP_VERSION
+        health=Path(sys.argv[sys.argv.index('--update-health')+1])
+        QTimer.singleShot(1000,lambda:atomic_json(health,{'version':APP_VERSION,'workspace_restored':True,
+                                                       'pid':__import__('os').getpid(),'rows':len(window.frame) if window.frame is not None else 0,
+                                                       'cells':len(window.cells),'page':window.current_page,'dirty':window.dirty}))
+    # Bounded integration diagnostics only; absent from ordinary launches.
+    if __import__('os').environ.get('STC_UPDATE_TEST_EXIT')=='1' and ('--update-health' in sys.argv or '--restore-workspace' in sys.argv):
+        from PySide6.QtCore import QTimer
+        def diagnostic_exit():
+            window.dirty=False
+            window.close()
+        QTimer.singleShot(3500,diagnostic_exit)
     sys.exit(app.exec())
