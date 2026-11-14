@@ -171,7 +171,8 @@ class UpdatesPage(QWidget):
         request.setRawHeader(b'Accept', b'application/json')
         request.setRawHeader(b'User-Agent', f'STC-Statistics/{APP_VERSION}'.encode())
         request.setAttribute(QNetworkRequest.Attribute.RedirectPolicyAttribute, QNetworkRequest.RedirectPolicy.NoLessSafeRedirectPolicy)
-        request.setTransferTimeout(15000)
+        request.setRawHeader(b'Cache-Control', b'no-cache')
+        request.setTransferTimeout(60000)
         self.reply = self.network.get(request)
         self.reply.downloadProgress.connect(lambda received, total: self.reply.abort() if self.reply is not None and (received > MAX_FEED_BYTES or total > MAX_FEED_BYTES) else None)
         self.reply.finished.connect(self.receive)
@@ -190,11 +191,18 @@ class UpdatesPage(QWidget):
         reply, self.reply = self.reply, None
         try:
             raw = bytes(reply.readAll())
-            if reply.error() != QNetworkReply.NetworkError.NoError or len(raw) > MAX_FEED_BYTES or not valid_https_url(reply.url().toString()):
-                raise ValueError('Update check failed.')
+            if reply.error() != QNetworkReply.NetworkError.NoError:
+                raise ValueError(reply.errorString())
+            if len(raw) > MAX_FEED_BYTES:
+                raise ValueError('Update feed exceeds the size limit.')
+            # GitHub redirects to signed asset URLs containing encoded spaces.
+            # PrettyDecoded turns %20 into literal spaces, invalidating a valid URL.
+            if not valid_https_url(reply.url().toString(QUrl.ComponentFormattingOption.FullyEncoded)):
+                raise ValueError('The update feed redirected to an invalid or non-HTTPS URL.')
             self.accept_manifest(json.loads(raw))
-        except (ValueError, TypeError, UnicodeError):
+        except (ValueError, TypeError, UnicodeError) as exc:
             self.state = 'updates_failed'
+            self.flow.error = str(exc)
         finally:
             reply.deleteLater()
             self.translate()

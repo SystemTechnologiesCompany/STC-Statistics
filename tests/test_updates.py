@@ -93,13 +93,45 @@ class UpdateTests(unittest.TestCase):
             page.check_button.click()
             self.assertEqual(page.state, 'updates_checking')
             self.assertFalse(page.check_button.isEnabled())
-            self.assertEqual(request.call_args.args[0].transferTimeout(), 15000)
+            self.assertEqual(request.call_args.args[0].transferTimeout(), 60000)
             reply.finished.emit()
         self.assertEqual(page.state, 'updates_available')
         self.assertTrue(page.download_button.isEnabled())
         self.assertEqual(page.download_url, 'https://downloads.example.test/new.zip')
         page.deleteLater()
         window.dirty = False
+        window.close()
+
+    def test_github_asset_redirect_with_encoded_spaces_is_accepted(self):
+        class Reply(QObject):
+            def readAll(self):
+                return QByteArray(json.dumps({'version':'99.1.0','download_url':'https://downloads.example.test/new.zip'}).encode())
+            def error(self): return QNetworkReply.NetworkError.NoError
+            def url(self):
+                return QUrl('https://release-assets.githubusercontent.com/asset?response-content-disposition=attachment%3B%20filename%3Dupdate.json')
+        window=MainWindow()
+        page=window.updates_page
+        reply=Reply()
+        self.assertFalse(valid_https_url(reply.url().toString()))
+        page.reply=reply
+        page.receive()
+        self.assertEqual(page.state,'updates_available')
+        self.assertTrue(page.download_button.isEnabled())
+        window.dirty=False
+        window.close()
+
+    def test_network_error_detail_is_visible(self):
+        class Reply(QObject):
+            def readAll(self): return QByteArray()
+            def error(self): return QNetworkReply.NetworkError.TimeoutError
+            def errorString(self): return 'Operation timed out (test detail)'
+        window=MainWindow()
+        page=window.updates_page
+        page.reply=Reply()
+        page.receive()
+        self.assertEqual(page.state,'updates_failed')
+        self.assertIn('Operation timed out (test detail)',page.status.text())
+        window.dirty=False
         window.close()
 
 

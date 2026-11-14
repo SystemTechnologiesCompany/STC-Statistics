@@ -1,5 +1,13 @@
 # Validation status
 
+## GitHub release-check repair — 14 November 2026
+
+- Reproduced the redirect regression: QUrl's default PrettyDecoded string introduces a literal space from GitHub's percent-encoded response-content-disposition query. The old validator rejects it; FullyEncoded preserves the valid HTTPS URL.
+- PASS: 18 updater/patch tests, including two new regressions for GitHub redirect handling and visible network-error details.
+- PASS: the corrected Qt checker read the live published 0.5.2 GitHub feed and reported updates_available with no error. The diagnostic honors the execution host's configured HTTPS proxy; no TLS verification was disabled.
+- PASS: ran the one-time repair script against the isolated real private-runtime cache. The production EXE remains unchanged.
+- Prepared a corrected 0.5.3 patch compatible with 0.5.1 and 0.5.2; publishing that release remains a separate user action.
+
 ## Version 0.5.1 updater — 14 November 2026
 
 - PASS: all 52 unittest checks completed with exit code 0. Twelve new patch checks cover archive/checksum validation, trusted release metadata, install locks, directory swap failure, startup rollback, in-app progress/checkpoint/restart dispatch, cancellation, corrupted downloads, checkpoint-write failure, installer-start failure and transient Windows file locks.

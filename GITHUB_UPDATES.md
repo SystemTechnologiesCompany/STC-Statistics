@@ -35,6 +35,18 @@ Open Updates, click Check for updates, then **Update app**. The test release cha
 
 ## Update and recovery behavior
 
+### Repair for GitHub checks in 0.5.1 / 0.5.2
+
+The first published test exposed a URL-validation bug: Qt's display representation decodes spaces in GitHub's signed redirect URLs. The corrected checker uses the fully encoded URL, allows 60 seconds for the redirect chain and displays the actual network error when a check fails.
+
+Save and close the app, then run:
+
+~~~powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Repair_GitHub_Update_Check.ps1
+~~~
+
+Publish the corrected assets from releases/0.5.3 as a normal latest **v0.5.3** release, preserving the names STC_Statistics_0.5.3_Update.zip and update.json. That update supports installed versions 0.5.1 and 0.5.2 and keeps the fix after installation. The old published 0.5.2 package predates the fix; do not overwrite the fixed checker by installing that old package after the repair. The repair script changes only the extracted updater module and keeps a backup; it does not change the EXE or workspace files.
+
 - Download progress displays transferred MiB and supports cancellation. A modal progress window protects the workspace from edits; the Updates page also displays its progress bar.
 - SHA-256, archive paths, source/target versions, Python compatibility and Python syntax are checked. Cancellation or a failed download/check leaves the current app and unsaved work open.
 - Before installation, a recovery project saves the working dataset, notebook code/results, chart/statistical/report settings, selected page, editor positions and project/dirty state. Installation does not start if saving fails.
