@@ -1,0 +1,10 @@
+.venv/
+.tmp/
+.tools/
+__pycache__/
+*.pyc
+*.zip
+.test-runtime/
+releases/
+build/
+dist/
