@@ -63,6 +63,10 @@ class UpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             shutil.copytree(project / 'stc_statistics', root / 'stc_statistics', ignore=shutil.ignore_patterns('__pycache__'))
+            # Public-only test fixture; no operational service or signing secrets.
+            (root/'stc_statistics/license_config.json').write_text(json.dumps({'server_url':'https://license.example.test'}))
+            key={'n':format((1<<3071)+1,'x'),'e':65537,'key_id':'a'*24}
+            (root/'stc_statistics/license_trust.py').write_text('PUBLIC_KEY = '+repr(key))
             for name in ('main.py', 'make_release.py', 'requirements.txt', 'README.md', 'Setup.cmd', 'Setup.ps1', 'Start.cmd'):
                 shutil.copy2(project / name, root / name)
             subprocess.run([sys.executable, str(root / 'make_release.py'), '--download-url', 'https://downloads.example.test/stc.zip',
@@ -120,7 +124,7 @@ class UpdateTests(unittest.TestCase):
         window.dirty=False
         window.close()
 
-    def test_network_error_detail_is_visible(self):
+    def test_network_error_has_friendly_message_and_support_code(self):
         class Reply(QObject):
             def readAll(self): return QByteArray()
             def error(self): return QNetworkReply.NetworkError.TimeoutError
@@ -130,7 +134,8 @@ class UpdateTests(unittest.TestCase):
         page.reply=Reply()
         page.receive()
         self.assertEqual(page.state,'updates_failed')
-        self.assertIn('Operation timed out (test detail)',page.status.text())
+        self.assertIn('STC-U101',page.status.text())
+        self.assertNotIn('Operation timed out (test detail)',page.status.text())
         window.dirty=False
         window.close()
 

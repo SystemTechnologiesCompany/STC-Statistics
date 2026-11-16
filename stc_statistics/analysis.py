@@ -90,10 +90,38 @@ def correlation_code(method='pearson'):
                 "        pair = pd.concat([numeric[left], numeric[right]], axis=1).dropna()\n"
                 "        if len(pair) >= 2:\n"
                 "            correlation.loc[left, right] = pair.rank(method='average').corr().iloc[0, 1]\n"
-                + table_display_code('correlation', 'Correlation (Spearman)'))
+                + table_display_code('correlation', 'Correlation (Spearman)') + correlation_graph_code())
     return ("# Pearson correlation; at least two complete observations per pair.\n"
             "correlation = numeric.corr(method='pearson', min_periods=2)\n"
-            + table_display_code('correlation', 'Correlation (Pearson)'))
+            + table_display_code('correlation', 'Correlation (Pearson)') + correlation_graph_code())
+
+
+def correlation_graph_code():
+    return '''
+# Signed visual correlation; full numerical results remain in the table above.
+import matplotlib.pyplot as plt
+visual_correlation = correlation.iloc[:12, :12]
+if len(visual_correlation.columns) < 2:
+    raise ValueError('Select at least two numeric columns / Sélectionnez deux colonnes numériques')
+if len(correlation.columns) > 12:
+    print('Heatmap: first 12 variables. Use Correlation Lab to choose variables. / Carte : 12 premières variables. Choisissez-les dans Corrélations.')
+figure, axis = plt.subplots(figsize=(max(8, len(visual_correlation)*.75), max(7, len(visual_correlation)*.65)))
+figure.set_facecolor('white')
+axis.set_facecolor('white')
+image = axis.imshow(np.ma.masked_invalid(visual_correlation.to_numpy()), vmin=-1, vmax=1, cmap='coolwarm')
+axis.set_xticks(range(len(visual_correlation)), visual_correlation.columns, rotation=35, ha='right')
+axis.set_yticks(range(len(visual_correlation)), visual_correlation.index)
+axis.tick_params(labelsize=10)
+axis.grid(False)
+for i in range(len(visual_correlation)):
+    for j in range(len(visual_correlation)):
+        coefficient = visual_correlation.iloc[i,j]
+        axis.text(j, i, '—' if not np.isfinite(coefficient) else f'{coefficient:.2f}', ha='center', va='center', fontsize=9, color='#172a20')
+axis.set_title('Signed correlation / Corrélation signée')
+figure.colorbar(image, ax=axis, label='Coefficient')
+figure.tight_layout(pad=2)
+plt.show()
+'''
 
 
 def conversion_code(columns, decimal_comma=False):

@@ -1,0 +1,4 @@
+*
+!licensing_server/
+!licensing_server/**
+licensing_server/__pycache__/

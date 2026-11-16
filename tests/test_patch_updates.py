@@ -18,7 +18,7 @@ from stc_statistics.version import APP_VERSION
 from make_patch import build_patch
 
 ROOT=Path(__file__).resolve().parent.parent
-TARGET='0.5.2'
+TARGET='99.0.0'
 
 
 class PatchTests(unittest.TestCase):
@@ -31,6 +31,9 @@ class PatchTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name)
+        provisioning=patch('stc_statistics.licensing.require_configured_release')
+        provisioning.start()
+        self.addCleanup(provisioning.stop)
         self.package,self.feed=build_patch(ROOT,self.root/'release',TARGET,[APP_VERSION],'Test patch')
         self.manifest=json.loads(self.feed.read_text())
 
@@ -235,7 +238,8 @@ class PatchTests(unittest.TestCase):
             loop.exec()
             QApplication.processEvents()
             self.assertEqual(page.state,'updates_failed')
-            self.assertIn('checksum',page.status.text())
+            self.assertIn('STC-U202',page.status.text())
+            self.assertNotIn('checksum',page.status.text())
             self.assertTrue(window.dirty)
             launch.assert_not_called()
 
@@ -256,7 +260,8 @@ class PatchTests(unittest.TestCase):
             loop.exec()
             QApplication.processEvents()
             self.assertEqual(page.state,'updates_failed')
-            self.assertIn('Disk write failed',page.status.text())
+            self.assertIn('STC-U301',page.status.text())
+            self.assertNotIn('Disk write failed',page.status.text())
             self.assertTrue(window.dirty)
             self.assertEqual(window.frame.x.tolist(),[1.5,2.5])
             self.assertFalse(window.updating)

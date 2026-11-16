@@ -20,12 +20,13 @@ $target = Join-Path $runtime 'app\stc_statistics\updates.py'
 if (!(Test-Path -LiteralPath (Join-Path $runtime 'app\stc_statistics\update_flow.py'))) {
     throw 'Enable the in-app updater first with Enable_In_App_Updates.ps1.'
 }
-$source = Join-Path $PSScriptRoot 'stc_statistics\updates.py'
+$installed = [IO.File]::ReadAllText($target, [Text.Encoding]::UTF8)
+$repaired = $installed.Replace('reply.url().toString()', 'reply.url().toString(QUrl.ComponentFormattingOption.FullyEncoded)').Replace('setTransferTimeout(15000)', 'setTransferTimeout(60000)')
 $backup = $target + '.before-url-repair'
 if (!(Test-Path -LiteralPath $backup)) { Copy-Item -LiteralPath $target -Destination $backup }
 $temporary = $target + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
 try {
-    Copy-Item -LiteralPath $source -Destination $temporary
+    [IO.File]::WriteAllText($temporary, $repaired, [Text.UTF8Encoding]::new($false))
     & $python -B -c 'import ast,sys; from pathlib import Path; ast.parse(Path(sys.argv[1]).read_bytes())' $temporary
     if ($LASTEXITCODE -ne 0) { throw 'Repair failed syntax validation. Installed app was not changed.' }
     Move-Item -LiteralPath $temporary -Destination $target -Force
@@ -33,4 +34,4 @@ try {
     if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary }
 }
 Write-Output 'GitHub redirect handling repaired. The EXE and workspace files are unchanged.'
-Write-Output 'Publish the corrected v0.5.3 release, then reopen the app and check for updates.'
+Write-Output 'Reopen the app and check for updates after the latest release is published.'

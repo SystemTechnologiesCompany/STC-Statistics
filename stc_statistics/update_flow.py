@@ -43,6 +43,7 @@ class UpdateFlow(QObject):
         self.reply=self.file=self.worker=self.dialog=None
         self.cancelled=False
         self.error=''
+        self.error_code=''
         self.received=0
         self.installing=False
         self.installer_timer=QTimer(self)
@@ -56,8 +57,12 @@ class UpdateFlow(QObject):
     def start(self,manifest):
         if self.busy:
             return
+        from .updates import supports_installation
+        if not supports_installation(manifest):
+            self.fail('Incompatible application/runtime compatibility metadata',code='STC-U203')
+            return
         try:
-            if self.app.active or (self.app.loader and self.app.loader.isRunning()):
+            if self.app.active or getattr(self.app,'science_busy',False) or (self.app.loader and self.app.loader.isRunning()):
                 raise ValueError(self.app.t('update_wait_idle'))
             self.runtime=installed_runtime()
             if (self.runtime.parent/'updates/install.lock').exists():
@@ -70,6 +75,7 @@ class UpdateFlow(QObject):
             self.file=(self.folder/'update.zip').open('xb')
             self.received=0
             self.error=''
+            self.error_code=''
             self.cancelled=False
             self.app.updating=True
             self.dialog=QProgressDialog(self.app.t('update_downloading'),self.app.t('cancel_update'),0,100,self.app)
@@ -241,9 +247,13 @@ class UpdateFlow(QObject):
         else:
             self.fail(self.app.t('update_cancelled'))
 
-    def fail(self,message):
+    def fail(self,message,code=None):
         self.installer_timer.stop()
         self.error=message
+        from .update_messages import PHASE_CODES,record_error
+        self.error_code='' if self.cancelled else (code or PHASE_CODES.get(self.page.state,'STC-U402'))
+        if self.error_code:
+            record_error(self.error_code,message,self.page.state)
         if self.file:
             self.file.close()
             self.file=None

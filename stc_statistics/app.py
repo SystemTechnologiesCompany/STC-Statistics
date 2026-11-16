@@ -114,7 +114,13 @@ class FileLoader(QThread):
 
     def run(self):
         try:
-            if Path(self.path).suffix.lower() == ".csv":
+            extension=Path(self.path).suffix.lower()
+            if extension in ('.geojson','.json','.asc'):
+                from .spatial_io import read_geojson,read_ascii_grid,source_code
+                frame=read_ascii_grid(self.path) if extension=='.asc' else read_geojson(self.path)
+                self.loaded.emit(frame,{'sheets':[],'source':source_code(self.path),'spatial_crs':'planar' if extension=='.asc' else 'wgs84'})
+                return
+            if extension == ".csv":
                 frame = pd.read_csv(self.path, sep=self.separator, decimal=self.decimal, header=self.header)
                 sheets = []
                 source = (f"df = pd.read_csv({self.path!r}, sep={self.separator!r}, "
@@ -275,6 +281,8 @@ class MainWindow(QMainWindow):
         build_workspace(self)
         from .workbench import install
         install(self)
+        from .studio import install as install_studios
+        install_studios(self)
         import tempfile
         self.bridge_dir = tempfile.TemporaryDirectory(prefix='stc-data-')
         self.bridge_path = str(Path(self.bridge_dir.name) / 'frame.parquet')
@@ -361,14 +369,18 @@ class MainWindow(QMainWindow):
         self.navigate(self.current_page, animate=False)
         self.decimal_comma.setText(self.t("comma"))
         current = self.chart_picker.currentData()
+        self.chart_picker.blockSignals(True)
         self.chart_picker.clear()
         for key in ("histogram", "box", "scatter"):
             self.chart_picker.addItem(self.t(key), key)
         if current:
             self.chart_picker.setCurrentIndex(self.chart_picker.findData(current))
+        self.chart_picker.blockSignals(False)
         self.update_info()
         for cell in self.cells:
             cell.translate()
+        for page in self.studio_pages.values():
+            page.translate()
         self.statusBar().showMessage(self.t("running") if self.active else self.t("ready"))
         self.set_busy(bool(self.active))
 
@@ -377,12 +389,14 @@ class MainWindow(QMainWindow):
 
     def save_project(self):
         from .workbench import guard, project_save
-        return guard(self, lambda: project_save(self))
+        return guard(self, lambda: project_save(self), 'project')
 
     def data_edited(self):
         self.data_pending = True
         self.mark_dirty()
         self.update_info()
+        for page in self.studio_pages.values():
+            page.changed()
         for label, value in zip(self.metric_values, (len(self.frame), len(self.frame.columns), int(self.frame.isna().sum().sum()))):
             label.setText(f'{value:,}')
 
@@ -397,26 +411,34 @@ class MainWindow(QMainWindow):
                 self.data_pending = False
                 self.data_sync_error = False
             except Exception as exc:
-                self.statusBar().showMessage(str(exc))
+                from .feedback import show_error
+                show_error(self,'sync',exc)
 
     def update_info(self):
+        loading=self.loader is not None and self.loader.isRunning()
+        self.reload_button.setEnabled(bool(self.file_path) and not self.active and not loading)
         if self.frame is None:
             self.data_info.setText(self.t("no_data"))
             self.dataset_badge.setText(self.t("no_dataset"))
         else:
-            self.dataset_badge.setText(f"{len(self.frame):,} × {len(self.frame.columns)}\n" + (Path(self.file_path).name if self.file_path else "STC sample"))
-            self.data_info.setText((self.file_path or "STC sample / exemple") + "\n" +
+            name=Path(self.file_path).name if self.file_path else (Path(self.project_path).name if self.project_path else self.t('working_dataset'))
+            self.dataset_badge.setText(f"{len(self.frame):,} × {len(self.frame.columns)}\n" + name)
+            self.data_info.setText(name + "\n" +
                                    self.t("preview").format(shown=len(self.frame),
                                                             rows=len(self.frame), cols=len(self.frame.columns)))
 
     def set_busy(self, busy):
+        busy = bool(busy or getattr(self,'science_busy',False))
         loading = self.loader is not None and self.loader.isRunning()
+        self.reload_button.setEnabled(bool(self.file_path) and not busy and not loading)
         self.table.setEnabled(not busy and not loading)
         for button in [self.open_button, self.demo_button, self.stats_button, self.correlation_button,
                        self.chart_button, self.convert_button, self.all_button, self.result_button,
                        self.restart_button, self.open_notebook_button, self.word_button]:
             button.setEnabled(not busy and not loading)
         self.stop_button.setEnabled(busy)
+        for page in getattr(self,'studio_pages',{}).values():
+            page.set_busy(busy or loading)
         for cell in self.cells:
             cell.run_button.setEnabled(not busy and not loading)
             cell.remove_button.setEnabled(not busy)
@@ -424,8 +446,9 @@ class MainWindow(QMainWindow):
             cell.actions.setEnabled(not busy)
 
     def open_file(self):
-        path, _ = QFileDialog.getOpenFileName(self, self.t("import"), "", "Excel / CSV (*.xlsx *.xls *.xlsm *.csv)")
+        path, _ = QFileDialog.getOpenFileName(self, self.t("import"), "", "Data (*.xlsx *.xls *.xlsm *.csv *.geojson *.json *.asc);;Excel / CSV (*.xlsx *.xls *.xlsm *.csv);;GeoJSON points (*.geojson *.json);;ESRI ASCII grid (*.asc)")
         if path:
+            self._previous_file_path=self.file_path
             self.file_path = path
             self.header_row.setValue(1)
             self.sheet.clear()
@@ -437,22 +460,36 @@ class MainWindow(QMainWindow):
         self.loader = FileLoader(self.file_path, self.sheet.currentText(), self.header_row.value() - 1,
                                  self.csv_separator.currentData(), self.csv_decimal.currentText(), self)
         self.loader.loaded.connect(self.file_loaded)
-        self.loader.failed.connect(lambda error: QMessageBox.warning(self, self.t("error"), error))
+        self.loader.failed.connect(self.import_failed)
         self.loader.finished.connect(lambda: self.set_busy(bool(self.active)))
         self.loader.start()
         self.set_busy(False)
 
     def file_loaded(self, frame, metadata):
+        self._previous_file_path=self.file_path
         current = self.sheet.currentText()
         self.sheet.clear()
         self.sheet.addItems(metadata["sheets"])
         if current in metadata["sheets"]:
             self.sheet.setCurrentText(current)
         self.use_frame(frame)
+        if metadata.get('spatial_crs'):
+            for key in ('maps','scene'):
+                page=self.studio_pages[key]
+                picker=page.fields['coordinate_mode']
+                picker.setCurrentIndex(picker.findData(metadata['spatial_crs']))
+                if key=='maps' and metadata['spatial_crs']=='wgs84':
+                    page.fields['mode'].setCurrentIndex(page.fields['mode'].findData('samples'))
         code = "import pandas as pd\nimport numpy as np\nimport matplotlib.pyplot as plt\n%matplotlib inline\n\n" + metadata["source"] + "\ndf.head()"
         cell = self.add_cell(code)
         self.run_cell(cell)
         self.navigate("data")
+
+    def import_failed(self,error):
+        self.file_path=getattr(self,'_previous_file_path',self.file_path)
+        self.update_info()
+        from .feedback import show_error
+        show_error(self,'import',error)
 
     def use_frame(self, frame):
         self.frame = frame
@@ -474,6 +511,10 @@ class MainWindow(QMainWindow):
             item.setCheckState(Qt.CheckState.Checked if column in numeric else Qt.CheckState.Unchecked)
             self.column_list.addItem(item)
         self.update_info()
+        for page in getattr(self,'studio_pages',{}).values():
+            page.refresh_columns()
+            if page.result is not None:
+                page.changed()
 
     def demo(self):
         self.file_path = None
@@ -594,6 +635,8 @@ class MainWindow(QMainWindow):
             self.chart_stack.setCurrentIndex(1)
 
     def run_cell(self, cell):
+        if self.science_busy:
+            return
         if self.active or (self.loader and self.loader.isRunning()):
             # A loader's final signal may arrive before QThread has fully exited.
             if not self.active and self.loader and self.loader.isRunning():
@@ -614,7 +657,8 @@ class MainWindow(QMainWindow):
                 self.frame.to_parquet(self.bridge_path, index=True)
         except Exception as exc:
             self.active = None
-            QMessageBox.warning(self, self.t('error'), str(exc))
+            from .feedback import show_error
+            show_error(self,'sync',exc)
             return
         self.worker = Execution(self.session, cell.editor.toPlainText(), self,
                                 load_path=self.bridge_path if self.frame is not None and self.data_pending else None,
@@ -650,17 +694,24 @@ class MainWindow(QMainWindow):
             self.run_cell(self.pending.pop(0))
 
     def run_all(self):
+        if self.science_busy:
+            return
         if self.active or not self.cells:
             return
         self.pending = list(self.cells)
         self.run_cell(self.pending.pop(0))
 
     def stop(self):
+        if self.science_busy:
+            for page in self.studio_pages.values():
+                page.cancel()
+            return
         self.pending.clear()
         try:
             self.session.interrupt()
         except Exception as exc:
-            QMessageBox.warning(self, self.t("error"), str(exc))
+            from .feedback import show_error
+            show_error(self,'session',exc)
 
     def restart(self):
         if self.active:
@@ -688,13 +739,14 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(self.t("saved") + ": " + path)
             return True
         except Exception as exc:
-            QMessageBox.warning(self, self.t("error"), str(exc))
+            from .feedback import show_error
+            show_error(self,'notebook',exc)
             return False
 
     def open_notebook(self):
         if self.dirty and not self.confirm_save():
             return
-        path, _ = QFileDialog.getOpenFileName(self, "Jupyter", "", "Jupyter (*.ipynb)")
+        path, _ = QFileDialog.getOpenFileName(self, self.t('open_notebook'), "", "Jupyter (*.ipynb)")
         if not path:
             return
         try:
@@ -708,7 +760,8 @@ class MainWindow(QMainWindow):
                     # Do not render saved rich output from imported notebooks.
             self.statusBar().showMessage(path)
         except Exception as exc:
-            QMessageBox.warning(self, self.t("error"), str(exc))
+            from .feedback import show_error
+            show_error(self,'notebook',exc)
 
     def export_results(self):
         self.export_report('xlsx')
@@ -740,7 +793,7 @@ class MainWindow(QMainWindow):
                 if plan.get('intro'):
                     items.insert(0, {'kind':'text', 'title':'Introduction', 'text':plan['intro']})
             else:
-                QMessageBox.information(self, 'STC Statistics', 'Results changed. Rebuild the report selection. / Résultats modifiés. Recomposez le rapport.')
+                QMessageBox.information(self, 'STC Statistics', self.t('report_changed'))
                 return
         if not items:
             QMessageBox.information(self, 'STC Statistics', self.t('no_report_results'))
@@ -765,7 +818,8 @@ class MainWindow(QMainWindow):
             os.replace(temporary, path)
             self.statusBar().showMessage(self.t('saved') + ': ' + path)
         except Exception as exc:
-            QMessageBox.warning(self, self.t('error'), str(exc))
+            from .feedback import show_error
+            show_error(self,'export',exc)
         finally:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
@@ -778,6 +832,12 @@ class MainWindow(QMainWindow):
         return self.save_project() if answer == QMessageBox.StandardButton.Save else True
 
     def closeEvent(self, event):
+        if self.science_busy:
+            self._science_close_pending=True
+            for page in self.studio_pages.values():
+                page.cancel()
+            event.ignore()
+            return
         if not getattr(self,'_update_exit',False) and self.updates_page.flow.busy:
             self.updates_page.flow.cancel()
             event.ignore()
@@ -799,6 +859,25 @@ def main():
     app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
     app.setStyle("Fusion")
     app.setStyleSheet(STYLE)
+    from .activation import ActivationDialog
+    from PySide6.QtWidgets import QDialog
+    from PySide6.QtCore import QTimer
+    gate=ActivationDialog()
+    if '--update-health' in sys.argv and '--restore-workspace' in sys.argv:
+        # Restore the saved checkpoint into memory before acknowledging startup.
+        # The licensed workbench stays unavailable while activation is pending.
+        from .projects import load_project
+        from .update_installer import atomic_json
+        from .version import APP_VERSION
+        checkpoint=sys.argv[sys.argv.index('--restore-workspace')+1]
+        gate.recovered_workspace=load_project(checkpoint)
+        health=Path(sys.argv[sys.argv.index('--update-health')+1])
+        QTimer.singleShot(1000,lambda:atomic_json(health,{
+            'version':APP_VERSION,'workspace_restored':True,'activation_required':True,
+            'checkpoint_in_memory':True,'pid':__import__('os').getpid()}))
+    if gate.exec()!=QDialog.DialogCode.Accepted or not gate.verified:
+        sys.exit(0)
+    del gate
     window = MainWindow()
     if '--restore-workspace' in sys.argv:
         from .workbench import project_open

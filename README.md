@@ -2,11 +2,19 @@
 
 An English/French Windows app for Excel statistics and editable Python notebook cells.
 
+**Latest patch: v1.0.1.** Map Studio and 3D Studio now offer **Prepare numbers / Préparer les nombres** with a preview for decimal-comma text. Missing numeric roles are explained before starting a job (STC-SCI102). Publish the matching ZIP and `update.json` in `releases/1.0.1/` under **v1.0.1**. The original Excel files, existing EXE/setup and v1.0.0 release assets remain unchanged.
+
+**V1.0.0 application update:** adds Map Studio, 3D Studio, Correlation Lab and Prediction Lab with live figures, numerical exports and reproducible Python. See [V1_RELEASE.md](V1_RELEASE.md) for workflows, formats and scientific limits. Publish `releases/1.0.0/STC_Statistics_1.0.0_Update.zip` and its `update.json` together under **v1.0.0**. The existing setup/EXE are unchanged; installed customers receive this version through Updates.
+
+**Windows setup wizard:** give new customers `dist/setup/STC_Statistics_0.5.6_Setup.exe`. It includes Python/libraries, English/French setup, Start menu and optional desktop shortcuts, activation and an uninstaller. Target: Windows 10/11 x64. See [WINDOWS_SETUP.md](WINDOWS_SETUP.md) for installation, distribution, preservation of user data and validation scope.
+
+**0.5.6 licensing:** an English/French STC UNIC CODE screen gates startup, with one PC/Windows-account activation and private Supabase administration. The developer completed deployment and live activation verification for project `zwjhjfgoiofbiyguhcbx`; the desktop public key is provisioned. Customers need a purchased code and internet at startup, with no account registration. The application-only update is prepared separately from the unchanged EXE. Follow [SUPABASE_SETUP.md](SUPABASE_SETUP.md); see [LICENSING.md](LICENSING.md) for protection limits and the alternative Python backend.
+
 The interface uses STC's verified website palette: #0A0F0D background, #121A17 surfaces, #3FBF7F emerald, #5FD9A0 highlights, #E8ECE9 text, and #8A968F secondary text. Glass-style panels, pointer-sensitive button highlights, fading dropdowns, rotating chevrons, sliding tabs and cell entry animations are native Qt controls. Enable Reduce motion / Réduire les animations to reduce transitions. The glass effect is drawn inside the app; it does not blur other desktop windows.
 
 ## Workspace pages / Pages de travail
 
-**0.5.1 updater:** in-app progress, verified application-code patches, automatic workspace recovery and startup rollback are implemented. The existing EXE is unchanged. Activate once using `Enable_In_App_Updates.ps1`, then publish the prepared 0.5.2 test assets to GitHub Releases. See [GITHUB_UPDATES.md](GITHUB_UPDATES.md) for the exact steps and supported recovery scope.
+**In-app updater:** download progress, verified application-code patches, workspace recovery and startup rollback are implemented. Installed setup customers already have this flow. Only the original portable 0.5.0 EXE requires the one-time bootstrap using `Enable_In_App_Updates.ps1`. See [GITHUB_UPDATES.md](GITHUB_UPDATES.md) for release publishing and recovery scope.
 
 Version 0.5 adds seven integrated tools:
 
@@ -16,7 +24,7 @@ Version 0.5 adds seven integrated tools:
 | Advanced statistics | Analysis → Advanced statistics: confidence intervals, multiple regression with an explicit response, one-sample/paired/Welch t-tests, ANOVA, Shapiro normality, standardized PCA and deterministic K-means. Generate a cell, inspect it, then Run. |
 | Automatic explanations | Descriptive and advanced analysis cells print English/French interpretations, sample sizes, exclusions and assumptions. These explanations can be exported as report text. |
 | Chart customization | Charts → Chart appearance: title, axis labels, color, histogram bins and linear/log scales. Settings apply when generating a new chart cell. Logarithmic axes require positive values. |
-| Complete projects | Projects → Save/Open `.stcproj`; Ctrl+S saves a project. Typed data, notebook code/results, selected columns, statistics options, chart settings and report selections travel together. Opening a project never executes code. Arbitrary Python variables outside `df` must be recreated by rerunning the relevant cells. |
+| Complete projects | Projects → Save/Open `.stcp`; Ctrl+S saves a project. Typed data, notebook code/results, selected columns, statistics options, chart settings and report selections travel together. Opening a project never executes code. Older `.stcproj` and `.stcproject` files remain readable; subsequent saves use `.stcp`. Arbitrary Python variables outside `df` must be recreated by rerunning the relevant cells. |
 | Report builder | Exports → Build and preview report: check results, drag to reorder, add an introduction and result comments, preview, then Save. The existing Word/Excel buttons export that selection. Rebuild the selection when results change. The preview shows report content; Word pagination may differ. |
 | Geology workspace | Geology → Configure analysis: assign porosity/permeability or profile/depth columns and units. Generate porosity–permeability plots, RQI/FZI tables, depth profiles and correlation matrices. Matrix columns use the shared Analysis/Charts selection. Editable permeability thresholds provide screening classes, not inferred lithology. |
 
@@ -33,7 +41,11 @@ Statistical implementation references: [SciPy statistics](https://docs.scipy.org
 | Charts / Graphiques | Choose columns and a chart, then create its editable Python cell. / Choix des colonnes et du graphique, puis génération de sa cellule Python. |
 | Python Notebook / Notebook Python | Edit and run cells in the full workspace width. / Modification et exécution des cellules sur toute la largeur disponible. |
 | Exports / Exportations | Save Word/Excel reports with tables and graphs, or a Jupyter notebook. / Rapports Word/Excel avec tableaux et graphiques, ou notebook Jupyter. |
-| Updates / Mises à jour | View the installed version, check published releases and open an update download. / Version installée, vérification des versions publiées et téléchargement. |
+| Map Studio / Atelier cartes | Point maps, interpolation, contours, terrain derivatives and profiles. / Cartes ponctuelles, interpolation, isovaleurs, dérivées et profils. |
+| 3D Studio / Atelier 3D | Interactive point clouds, surfaces, TIN, volume slices and voxels. / Points, surfaces, TIN, coupes et voxels interactifs. |
+| Correlation Lab / Corrélations | Graphical correlations, scatter matrices and bivariate diagnostics. / Corrélations graphiques, matrices de nuages et diagnostics bivariés. |
+| Prediction Lab / Prédiction | RF/GB regression, tuning, train/test metrics and residual plots. / Régression RF/GB, optimisation, mesures apprentissage/test et résidus. |
+| Updates / Mises à jour | Check, download with progress, save the workspace, install and restart. / Vérification, téléchargement avec progression, sauvegarde du travail, installation et redémarrage. |
 
 The same column selection is shared between Analysis and Charts. Changing pages preserves data, cells and the Python session. Imports keep you on Data; generated analysis and chart cells open Notebook. / La sélection de colonnes est commune à Analyse et Graphiques. Les données, cellules et la session Python restent disponibles en changeant de page. L’importation reste sur Données ; les cellules générées s’ouvrent dans Notebook.
 

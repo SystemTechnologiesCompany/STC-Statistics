@@ -20,6 +20,8 @@ import zipfile
 MAX_PACKAGE = 64 * 1024**2
 MAX_EXPANDED = 192 * 1024**2
 FORMAT = 'stc-app-patch-v1'
+RUNTIME_ID = 'stc-python314-v1'
+MIN_APP_VERSION = '0.5.1'
 
 
 def version(value):
@@ -77,9 +79,14 @@ def validate_patch(package, expected_hash, current_version, target_version):
             raise ValueError('Patch manifest too large')
         manifest=json.loads(z.read('patch.json'))
         if (manifest.get('format')!=FORMAT or manifest.get('version')!=target_version
-                or current_version not in manifest.get('from_versions',[])
                 or manifest.get('python')!=f'{sys.version_info.major}.{sys.version_info.minor}'):
             raise ValueError('This update is not compatible with the installed app/runtime')
+        if manifest.get('cumulative') is not None:
+            if (manifest['cumulative'] is not True or manifest.get('runtime_id')!=RUNTIME_ID
+                    or version(current_version)<version(manifest.get('minimum_version'))):
+                raise ValueError('This cumulative update requires another runtime')
+        elif current_version not in manifest.get('from_versions',[]):
+            raise ValueError('This legacy update does not support the installed app')
         files=manifest.get('files',{})
         if not isinstance(files,dict) or set(files)!=set(names)-{'patch.json'}:
             raise ValueError('Patch file list mismatch')

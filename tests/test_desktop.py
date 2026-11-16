@@ -21,7 +21,7 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(set(TEXT['en']), set(TEXT['fr']))
         window = MainWindow()
         window.language_picker.setCurrentIndex(1)
-        self.assertEqual(window.open_button.text(), 'Ouvrir Excel / CSV')
+        self.assertEqual(window.open_button.text(), TEXT['fr']['import'])
         cell = window.add_cell('1 + 2')
         self.assertEqual(cell.editor.toPlainText(), '1 + 2')
         self.assertEqual(cell.run_button.text(), 'Exécuter  ▶')

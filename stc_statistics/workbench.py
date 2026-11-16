@@ -7,7 +7,7 @@ import nbformat
 import pandas as pd
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QDialogButtonBox, QLineEdit, QGridLayout, QWidget,
-    QDoubleSpinBox, QSpinBox, QListWidget, QListWidgetItem, QMessageBox, QFileDialog,
+    QDoubleSpinBox, QSpinBox, QListWidget, QListWidgetItem, QMessageBox, QFileDialog, QLabel,
     QTextBrowser, QPlainTextEdit, QHBoxLayout, QCheckBox)
 from .theme import GlassComboBox as Combo, GlassButton as Button
 
@@ -48,16 +48,19 @@ def choose(app, title, entries):
     return {k: (w.currentData() if isinstance(w, Combo) else w.text()) for k,w in widgets.items()}
 
 
-def guard(app, fn):
-    if getattr(app,'updating',False) or app.active or (app.loader and app.loader.isRunning()):
+def guard(app, fn, operation='input'):
+    if getattr(app,'updating',False) or getattr(app,'science_busy',False) or app.active or (app.loader and app.loader.isRunning()):
         return
     try:
         return fn()
     except Exception as exc:
-        QMessageBox.warning(app, app.t('error'), str(exc))
+        from .feedback import show_error
+        if operation=='project' and app.data_sync_error:
+            operation='sync'
+        show_error(app,operation,exc)
 
 
-def clean(app):
+def clean(app,initial_columns=None):
     if app.frame is None:
         raise ValueError(app.t('no_data'))
     from .projects import clean_frame
@@ -67,7 +70,8 @@ def clean(app):
         item = QListWidgetItem(str(c))
         item.setData(Qt.ItemDataRole.UserRole,c)
         item.setFlags(item.flags()|Qt.ItemFlag.ItemIsUserCheckable)
-        item.setCheckState(Qt.CheckState.Checked if c in app.selected_columns() else Qt.CheckState.Unchecked)
+        selected=app.selected_columns() if initial_columns is None else initial_columns
+        item.setCheckState(Qt.CheckState.Checked if c in selected else Qt.CheckState.Unchecked)
         listing.addItem(item)
     outer.addWidget(listing)
     buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok|QDialogButtonBox.StandardButton.Cancel)
@@ -88,7 +92,9 @@ def clean(app):
     result = clean_frame(app.frame, columns, **options)
     d, outer, form = dialog(app,tr(app,'Preview changes','Aperçu des modifications'))
     browser = QTextBrowser()
-    browser.setHtml(f'<p>{len(app.frame)} → {len(result)} rows / lignes; missing / manquantes: {app.frame.isna().sum().sum()} → {result.isna().sum().sum()}</p>'+result.head(30).to_html())
+    summary=tr(app,f'Rows: {len(app.frame):,} → {len(result):,}. Missing values: {app.frame.isna().sum().sum():,} → {result.isna().sum().sum():,}.',
+               f'Lignes : {len(app.frame):,} → {len(result):,}. Valeurs manquantes : {app.frame.isna().sum().sum():,} → {result.isna().sum().sum():,}.')
+    browser.setHtml('<p>'+html.escape(summary)+'</p>'+result.head(30).to_html())
     outer.addWidget(browser)
     buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Apply | QDialogButtonBox.StandardButton.Cancel)
     buttons.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(d.accept)
@@ -109,35 +115,43 @@ def advanced(app):
         raise ValueError('No numeric columns / Aucune colonne numérique')
     options = choose(app,tr(app,'Advanced statistics','Statistiques avancées'),[
         ('method',tr(app,'Method','Méthode'),[(tr(app,e,f),v) for e,f,v in [
-            ('Mean confidence intervals','Intervalles de confiance','ci'),('Multiple regression (last column = response)','Régression (dernière colonne = réponse)','regression'),
+            ('Mean confidence intervals','Intervalles de confiance','ci'),('Multiple linear regression','Régression linéaire multiple','regression'),
             ('One-sample t-test','Test t à un échantillon','one_t'),('Welch independent t-test','Test t de Welch indépendant','welch'),('Paired t-test','Test t apparié','paired'),
             ('One-way ANOVA (columns = groups)','ANOVA (colonnes = groupes)','anova'),('Shapiro normality (first column)','Normalité Shapiro (première colonne)','normality'),
             ('Standardized PCA','ACP standardisée','pca'),('K-means clustering','Classification K-means','cluster')]]),
         ('response',tr(app,'Regression response (other selected columns = predictors)','Réponse de régression (autres colonnes sélectionnées = prédicteurs)'),[(str(c),c) for c in numeric_columns]),
         ('confidence',tr(app,'Confidence (0–1)','Confiance (0–1)'),'.95'),('reference',tr(app,'Null mean','Moyenne sous H0'),'0'),('clusters',tr(app,'Clusters','Groupes'),'3')])
     if options:
-        options['confidence'] = float(options['confidence'])
-        options['reference'] = float(options['reference'])
-        options['clusters'] = int(options['clusters'])
         method = options.pop('method')
         response = options.pop('response')
         columns = app.selected_columns()
+        parameters={}
+        if method not in ('pca','cluster'):
+            parameters['confidence']=float(options['confidence'].replace(',','.'))
+            if not 0<parameters['confidence']<1:
+                raise ValueError('Confidence must be between 0 and 1')
+        if method=='one_t':
+            parameters['reference']=float(options['reference'].replace(',','.'))
+        if method=='cluster':
+            parameters['clusters']=int(options['clusters'])
+            if parameters['clusters']<2:
+                raise ValueError('Choose at least two clusters')
         if method == 'regression':
             columns = [c for c in columns if c != response] + [response]
-        if not 0 < options['confidence'] < 1 or options['clusters'] < 2:
-            raise ValueError('Confidence must be between 0 and 1; clusters ≥ 2 / Confiance entre 0 et 1; groupes ≥ 2')
-        app.add_cell(recipe(method,columns,app.language,**options))
+        app.add_cell(recipe(method,columns,app.language,**parameters))
 
 
 def geo(app, preferred='reservoir'):
     from .advanced import geology_recipe
     if app.frame is None:
         raise ValueError(app.t('no_data'))
-    cols = [(str(c),c) for c in app.frame.columns]
+    cols = [(str(c),c) for c in app.frame.select_dtypes(include='number').columns]
+    if len(cols)<2:
+        raise ValueError(app.t('need_two'))
     options = choose(app,tr(app,'Geology analysis','Analyse géologique'),[
-        ('method',tr(app,'Analysis','Analyse'), sorted([('Porosity–permeability / Porosité–perméabilité + RQI/FZI','reservoir'),('Depth profile / Profil de profondeur','depth'),('Correlation matrix / Matrice de corrélation','matrix')],key=lambda p:p[1]!=preferred)),
+        ('method',tr(app,'Analysis','Analyse'), sorted([(tr(app,'Porosity–permeability and RQI/FZI','Porosité–perméabilité et RQI/FZI'),'reservoir'),(tr(app,'Depth profile','Profil de profondeur'),'depth'),(tr(app,'Correlation matrix','Matrice de corrélation'),'matrix')],key=lambda p:p[1]!=preferred)),
         ('first',tr(app,'Porosity / profile value','Porosité / valeur du profil'),cols),
-        ('second',tr(app,'Permeability (mD) / depth','Perméabilité (mD) / profondeur'),cols),
+        ('second',tr(app,'Permeability (mD) / depth','Perméabilité (mD) / profondeur'),cols[1:]+cols[:1]),
         ('percent',tr(app,'Porosity unit','Unité de porosité'),[('%',True),('Fraction (0–1)',False)]),
         ('thresholds',tr(app,'Class thresholds (mD, separated by ;)','Seuils de classes (mD, séparés par ;)'),'1;10;100;1000')])
     if options:
@@ -145,7 +159,8 @@ def geo(app, preferred='reservoir'):
         columns = app.selected_columns() if method == 'matrix' else [options['first'],options['second']]
         if len(set(columns)) != len(columns):
             raise ValueError('Choose distinct columns / Choisissez des colonnes distinctes')
-        app.add_cell(geology_recipe(method,columns,percent=options['percent'],thresholds=tuple(float(x) for x in options['thresholds'].split(';'))))
+        parameters={'percent':options['percent'],'thresholds':tuple(float(x.replace(',','.')) for x in options['thresholds'].split(';'))} if method=='reservoir' else {}
+        app.add_cell(geology_recipe(method,columns,**parameters))
 
 
 def chart_options(app):
@@ -166,31 +181,36 @@ def chart_options(app):
 
 
 def project_save(app, path=None, set_current=True):
-    from .projects import save_project
+    from .projects import save_project, project_filename
     if app.data_sync_error:
-        raise ValueError('Resolve the notebook DataSyncError before saving / Corrigez DataSyncError avant de sauvegarder')
+        raise ValueError(app.t('sync_error'))
     if path is None:
-        path,_ = QFileDialog.getSaveFileName(app,'STC project',app.project_path or 'STC_Project.stcproj','STC (*.stcproj)')
+        path,_ = QFileDialog.getSaveFileName(app,'STC project',project_filename(app.project_path or 'STC_Project.stcp'),'STC (*.stcp)')
     if not path:
         return False
-    if not path.lower().endswith('.stcproj'):
-        path += '.stcproj'
-    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(c.editor.toPlainText(),outputs=c.outputs,execution_count=c.execution_count,metadata={'stc_executed_source':c.executed_source}) for c in app.cells])
+    if set_current:
+        path = project_filename(path)
+    from .studio import save_states
+    studios=save_states(app)
+    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(c.editor.toPlainText(),outputs=c.outputs,execution_count=c.execution_count,metadata={'stc_executed_source':c.executed_source,'stc_studio_key':getattr(c,'studio_key',None),'stc_studio_result':getattr(c,'studio_payload',None)}) for c in app.cells])
     settings={'chart':app.chart_options,'language':app.language,'metrics':app.stats_metrics,'ddof':app.stats_ddof,'percentiles':app.stats_percentiles,'columns':app.selected_columns(),'report':app.report_plan}
+    settings.update(studios=studios,correlation=app.correlation_method.currentData(),chart_kind=app.chart_picker.currentData(),
+                    report_flags=[app.report_tables.isChecked(),app.report_graphs.isChecked(),app.report_text.isChecked(),app.report_code.isChecked()])
     if hasattr(app,'_update_recovery'):
         settings['_update_recovery']=app._update_recovery
     save_project(path, app.frame,notebook,settings)
     if set_current:
         app.project_path = path
         app.dirty = False
-    app.statusBar().showMessage(app.t('saved')+': '+path)
+        app.update_info()
+        app.statusBar().showMessage(app.t('saved')+': '+path)
     return True
 
 
 def project_open(app, path=None, restore_recovery=False):
     from .projects import load_project
     if path is None:
-        path,_ = QFileDialog.getOpenFileName(app,'STC project','','STC (*.stcproj)')
+        path,_ = QFileDialog.getOpenFileName(app,'STC project','','STC (*.stcp *.stcproj *.stcproject)')
     if not path:
         return
     frame,notebook,settings = load_project(path)
@@ -217,6 +237,8 @@ def project_open(app, path=None, restore_recovery=False):
             cell = app.add_cell(entry.source)
             cell.outputs = entry.outputs
             cell.executed_source = entry.metadata.get('stc_executed_source')
+            cell.studio_key = entry.metadata.get('stc_studio_key')
+            cell.studio_payload = entry.metadata.get('stc_studio_result')
             cell.execution_count = entry.execution_count
             # Strip arbitrary saved HTML, retain only sanitized tables and local PNG output.
             from .reports import TableParser
@@ -234,6 +256,12 @@ def project_open(app, path=None, restore_recovery=False):
     app.stats_metrics = settings.get('metrics',list(range(16)))
     app.stats_ddof = settings.get('ddof',1)
     app.stats_percentiles = settings.get('percentiles',[])
+    for picker,key in ((app.correlation_method,'correlation'),(app.chart_picker,'chart_kind')):
+        index=picker.findData(settings.get(key))
+        if index>=0:
+            picker.setCurrentIndex(index)
+    for checkbox,value in zip((app.report_tables,app.report_graphs,app.report_text,app.report_code),settings.get('report_flags',[])):
+        checkbox.setChecked(bool(value))
     for i in range(app.column_list.count()):
         item = app.column_list.item(i)
         item.setCheckState(Qt.CheckState.Checked if item.data(Qt.ItemDataRole.UserRole) in settings.get('columns',[]) else Qt.CheckState.Unchecked)
@@ -242,8 +270,11 @@ def project_open(app, path=None, restore_recovery=False):
     app.data_pending = frame is not None
     app.data_sync_error = False
     app.language_picker.setCurrentIndex(1 if settings.get('language')=='fr' else 0)
+    from .studio import restore_states
+    restore_states(app,settings.get('studios',{}))
     app.dirty = False
     app.navigate('data')
+    app.update_info()
     if restore_recovery and settings.get('_update_recovery'):
         state=settings['_update_recovery']
         app.project_path=state.get('project_path')
@@ -263,22 +294,30 @@ def project_open(app, path=None, restore_recovery=False):
         if state.get('page') in app.nav_buttons:
             app.navigate(state['page'])
         app.update_info()
+        app.dirty=bool(state.get('dirty'))
 
 
 def report_builder(app):
     from .reports import collect_results
     items = collect_results(app.cells,tables=app.report_tables.isChecked(),graphs=app.report_graphs.isChecked(),text=app.report_text.isChecked(),code=app.report_code.isChecked(),language=app.language)
+    if not items:
+        QMessageBox.information(app,'STC Statistics',app.t('no_report_results'))
+        return
     d, outer, form = dialog(app,tr(app,'Build your report','Composer le rapport'))
+    help_label=QLabel(app.t('report_builder_help'))
+    help_label.setWordWrap(True)
+    help_label.setObjectName('hint')
+    outer.addWidget(help_label)
     listing = QListWidget()
     listing.setDragDropMode(QListWidget.DragDropMode.InternalMove)
+    previous=app.report_plan[0] if app.report_plan and app.report_plan[0].get('signature')==report_signature(items) else {}
     for i,item in enumerate(items):
-        row = QListWidgetItem(item['title']+' · '+item['kind'])
+        kind={'image':tr(app,'Chart','Graphique'),'table':tr(app,'Table','Tableau'),'text':tr(app,'Text','Texte'),'code':'Python'}.get(item['kind'],item['kind'])
+        row = QListWidgetItem(item['title']+' · '+kind)
         row.setData(Qt.ItemDataRole.UserRole,i)
         row.setFlags(row.flags()|Qt.ItemFlag.ItemIsUserCheckable)
-        previous = app.report_plan[0] if app.report_plan else {}
         row.setCheckState(Qt.CheckState.Checked if not previous or i in previous.get('indices',[]) else Qt.CheckState.Unchecked)
         listing.addItem(row)
-    previous = app.report_plan[0] if app.report_plan else {}
     if previous.get('signature') == report_signature(items):
         order = previous.get('indices',[]) + [i for i in range(len(items)) if i not in previous.get('indices',[])]
         rows = {}
@@ -329,7 +368,8 @@ def report_builder(app):
     button=Button(tr(app,'Preview selected results','Aperçu des résultats sélectionnés'))
     button.clicked.connect(show)
     outer.addWidget(button)
-    buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Save|QDialogButtonBox.StandardButton.Cancel)
+    buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Ok|QDialogButtonBox.StandardButton.Cancel)
+    buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr(app,'Use selection','Utiliser la sélection'))
     buttons.accepted.connect(d.accept)
     buttons.rejected.connect(d.reject)
     outer.addWidget(buttons)
@@ -342,17 +382,22 @@ def report_builder(app):
 def install(app):
     app.chart_options, app.report_plan = {}, []
     app.project_path, app.data_undo = None,None
+    app.column_list.itemChanged.connect(app.mark_dirty)
+    app.correlation_method.currentIndexChanged.connect(app.mark_dirty)
+    app.chart_picker.currentIndexChanged.connect(app.mark_dirty)
+    for checkbox in (app.report_tables,app.report_graphs,app.report_text,app.report_code):
+        checkbox.toggled.connect(app.mark_dirty)
     from .pages import PAGE_KEYS, card
     from .i18n import TEXT
     for lang in ('en','fr'):
         TEXT[lang].update({'projects':'Projects' if lang=='en' else 'Projets','projects_description':'Save and reopen complete workspaces.' if lang=='en' else 'Enregistrer et rouvrir des espaces de travail complets.',
                            'geology':'Geology' if lang=='en' else 'Géologie','geology_description':'Reservoir properties, depth profiles and correlations.' if lang=='en' else 'Propriétés du réservoir, profils et corrélations.'})
-    def add(layout,en,fr,callback):
+    def add(layout,en,fr,callback,operation='input'):
         button=Button()
         key='extension_'+str(len(app.bound_labels))
         TEXT['en'][key],TEXT['fr'][key]=en,fr
         app.bound_labels.append((button,key))
-        button.clicked.connect(lambda:guard(app,callback))
+        button.clicked.connect(lambda:guard(app,callback,operation))
         layout.addWidget(button)
     data_layout=app.pages.widget(0).layout()
     row=QHBoxLayout()
@@ -373,8 +418,8 @@ def install(app):
             TEXT['en'][text_key]='Keep your dataset, code, results and report choices together. Save a project before closing, then reopen it to continue. Ctrl+S saves the complete workspace. Code is never executed when opening a project.'
             TEXT['fr'][text_key]='Conservez ensemble vos données, code, résultats et choix de rapport. Enregistrez un projet avant de fermer, puis rouvrez-le pour continuer. Ctrl+S enregistre tout l’espace de travail. Aucun code ne s’exécute à l’ouverture.'
             layout.addWidget(app.label(text_key,wrap=True))
-            add(layout,'Save complete project…','Enregistrer le projet complet…',lambda:project_save(app))
-            add(layout,'Open project…','Ouvrir un projet…',lambda:project_open(app))
+            add(layout,'Save project (.stcp)…','Enregistrer le projet (.stcp)…',lambda:project_save(app),'project')
+            add(layout,'Open project…','Ouvrir un projet…',lambda:project_open(app),'project')
         else:
             text_key='geology_intro'
             TEXT['en'][text_key]='Porosity–permeability | RQI / FZI | Depth profiles | Correlation matrix\n\nAssign columns and units in the analysis dialog. Generated Python remains editable. Permeability classes use editable screening thresholds; validate them for your reservoir.'

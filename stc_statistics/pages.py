@@ -11,7 +11,7 @@ from .charts import ChartViewer
 from .stat_options import choose_statistics
 from .updates import UpdatesPage
 
-PAGE_KEYS = ("data", "analysis", "charts", "notebook", "exports", "updates", "projects", "geology")
+PAGE_KEYS = ("data", "analysis", "charts", "notebook", "exports", "updates", "projects", "geology", "maps", "scene", "relations", "prediction")
 LOGO_PATH = Path(__file__).resolve().parent / "assets" / "stc-logo.png"
 
 
@@ -146,7 +146,7 @@ def build_workspace(app):
     app.header_row = QSpinBox()
     app.header_row.setRange(1, 100000)
     options.addWidget(app.header_row)
-    app.button("apply", app.reload_file, options)
+    app.reload_button=app.button("apply", app.reload_file, options)
     config.addLayout(options)
     csv = QHBoxLayout()
     csv.addWidget(app.label("csv_sep"))

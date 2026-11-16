@@ -1,5 +1,86 @@
 # Validation status
 
+## v1.0.1 map input fix — 15 November 2026
+
+- Reproduced the reported missing-column failure with decimal-comma spreadsheet fields. The selectors correctly excluded nonnumeric data, but a missing scalar/coordinate led to a misleading generic engine error.
+- PASS: a 131-test source suite, including the three new regression cases for mixed Excel coordinates, decimal-comma scalar preparation/reselection and scalar-free point maps. After the final caption shortening, the installed private-runtime run passed all **36** scientific/studio tests, covering the final captions and input behavior.
+- PASS: all four worksheets of the user's supplied workbook through the real Qt cleaning picker/preview/apply path, automatic refreshed selectors and actual map QProcess calculations. Undo preserved each pre-conversion DataFrame and input-file SHA-256 stayed unchanged. The workbook is not included in release assets. Evidence: `.tmp/map-workbook-report.json`, `.tmp/map-workbook.log` and EN/FR `.tmp/map-fix-*.png` captures.
+- Data-quality finding: two source POR measurements remain above 100 after representation conversion. They were preserved without inferred decimal placement or unit changes; the user must check the original measurements before treating them as porosity percentages.
+- PASS: real isolated **1.0.0 → 1.0.1** application-only installation/restart, retained old-app backup, unchanged checkpoint bytes and enforced activation. The final installed application then passed the 36 bundled-runtime tests and rendered all 17 scientific display modes. Evidence: `.tmp/map-fix-install-report.json`, `.tmp/map-fix-private-runtime-report.json`, `.tmp/map-fix-private-tests.log`.
+- Prepared `releases/1.0.1/STC_Statistics_1.0.1_Update.zip` and matching `update.json`, tag **v1.0.1**. No GitHub release was published, no live download is claimed, and the user's customer installation was not changed. Original EXE/setup hashes and the previous 1.0.0 package remain unchanged. Scientific algorithms, source values, licensing protocol and bundled dependencies were not altered.
+
+## V1.0.0 scientific workspaces and application patch — 15 November 2026
+
+- PASS: full source suite **128 tests**, including licensing, updater, projects, statistics, reports and the new workspaces. After the final language-restoration adjustment, the seven focused Qt studio tests passed again.
+- PASS: **33 scientific/studio tests** under the existing bundled Python with external Python paths removed and PATH restricted to Windows System32. Imports were verified to come from the isolated private runtime, not the development venv. This includes numerical fixtures, real cancellable QProcess jobs, train/test leakage checks, typed exports, live-camera changes and `.stcp` restoration without retraining.
+- PASS: all **17 map/scene/correlation display modes** computed, round-tripped through safe JSON and rendered using bundled libraries. A real defect in empty `(0, 3)` volume mesh restoration was fixed and regression-tested. Rendered modes include hillshade, regional residuals, TIN, scalar slices, voxels, density and scatter matrices. RF/GB diagnostics are exercised by the scientific/studio tests and report probe.
+- PASS: actual **0.5.6 → 1.0.0 application-only installation and restart** in an isolated copy of the shipped runtime, using the old runtime's installer helper and the final release ZIP. The old application backup remained, checkpoint bytes were unchanged, and the restarted V1 activation dialog acknowledged its recovered checkpoint in memory. A fresh unlicensed launch retained STC-L100 and did not construct the workbench. No real customer activation credentials were copied or bypassed.
+- PASS: actual V1 results produced Word and Excel reports containing **10 tables and 7 figures**, valid package XML/relationships/media and numeric Excel values. Microsoft Word page rendering was not exercised. Full numerical table CSV/Excel exports and native-coordinate ASCII/OBJ geometry are covered separately.
+- PASS: the four new workspaces were rendered and visually inspected at **1350 × 738** in English/French. Fixed overlapping control rows, reduced 3D tick crowding and simplified correlation annotations. Dense multi-panel plots retain minimum readable sizes with scrolling; expanded live views returned correctly. Pair counts remain in their full table rather than overprinted inside heatmap cells.
+- PASS: final patch validates archive paths, all application hashes, Python syntax/ABI, exact target version and every declared source version 0.5.1–0.5.6. It contains only the application and `patch.json`, without an interpreter, EXE, installer, server, private signing key, issued codes or activation credentials. The original portable EXE and existing setup SHA-256 remain unchanged.
+- Evidence: `.tmp/v1-release-tests.log`, `.tmp/v1-studio-release.log`, `.tmp/v1-private-runtime-report.json`, `.tmp/v1-install-report.json`, `.tmp/v1-report-export-report.json`, `.tmp/v1-package-report.json` and the eight `.tmp/v1-*-en/fr.png` page captures. Test runtime work is isolated under `.tmp/v1-runtime-4267ab89`.
+- Release assets: `releases/1.0.0/STC_Statistics_1.0.0_Update.zip` and matching `update.json`, tag **v1.0.0**. Nothing was published to GitHub and no live GitHub download of this release has been tested. The customer's actual installed app, existing EXE and setup were not replaced. Physical second-PC/account rollout checks remain outstanding. This release implements the defined tools in [V1_RELEASE.md](V1_RELEASE.md), not complete parity with commercial GIS/geophysics suites.
+
+The following sections record older releases and their historical limitations.
+
+## Windows setup wizard (0.5.6) - 14 November 2026
+
+- Built `dist/setup/STC_Statistics_0.5.6_Setup.exe` with Inno Setup 7.1.1, English/French pages, STC artwork, a separate installed launcher, selectable desktop shortcut, Start menu entries and uninstaller. The source app version and original portable EXE remain 0.5.6 and unchanged baseline 0.5.0 respectively; the portable EXE checksum still matches its recorded value.
+- PASS: five installer tests cover the runtime checksum, exclusion of the old unlicensed app, current licensed source, path traversal, private credential/key rejection, retained vendor notices/CA certificates, preservation rules, architecture, OS minimum and downgrade protection.
+- PASS: actual installed launcher/private Python diagnostics with external Python paths removed and PATH restricted to Windows System32: descriptive/advanced statistics, PCA, graphs, projects, GUI, Word/Excel exports, ipykernel imports and kernel command. A fresh normal application startup displayed the bilingual activation dialog with STC-L100 and never constructed an unlicensed workbench. The installed runtime satisfied the existing in-app updater checks.
+- PASS: actual French setup and uninstall in an isolated workspace directory with Windows uninstall-key registration and shortcuts disabled. Newer app code was not overwritten by older setup; an active update lock blocked setup. Uninstall removed the runtime/application while retaining project, licensing and update recovery sentinels.
+- The first Inno 6 build exposed a real long-path rename failure in bundled Qt artifacts and rolled back. The final build requires Inno 7+; the repeated install/uninstall succeeded with extended Windows paths. Final UI/OS configuration requires Windows 10 build 17763 (1809) or newer, matching Qt, and includes a dark title bar. Final installer checksum is recorded separately from the application-patch feed.
+- LIMITS: the setup is unsigned (no STC Authenticode certificate supplied). Normal Windows Apps registration/Start menu/desktop creation could not be tested in the restricted profile; only isolated mode was exercised. A separate physical clean Windows PC/second account, live customer activation and actual installed in-app upgrade remain rollout checks. The existing source/runtime and Supabase live checks are recorded below; do not claim testing on every PC.
+
+## Supabase live verification and 0.5.6 release candidate - 14 November 2026
+
+- USER-VERIFIED: the supplied terminal screenshot shows `supabase_setup.py verify` passing live signed activation, saved-token validation and second-seat rejection, and provisioning the desktop public key. The earlier browser screenshot shows the deployed health route responding successfully. No secret codes, tokens or keys were shared in those screenshots.
+- PASS: 12 patch/installer tests and 6 update/feed tests after changing the source version to 0.5.6 and provisioning the key.
+- Prepared `releases/0.5.6/STC_Statistics_0.5.6_Update.zip` and `update.json` with the exact release tag `v0.5.6` and friendly English/French customer notes. Archive checksum/path/version verification covers all supported bases 0.5.1 through 0.5.5. Server administration, SQL, private signing material and activation credentials are excluded; only the desktop source/assets, public key and endpoint are included.
+- Existing EXE checksum is unchanged. The release candidate has not been published, installed or tested in the existing EXE by the assistant. The developer must have a valid code ready for first activation after installing. A real second PC/account test and ordinary customer workflow test remain necessary before university rollout; the live verification used a second device fingerprint.
+
+## Supabase licensing adaptation - 14 November 2026
+
+- PASS: 90 Python tests and 9 Node handler/protocol tests. The Node tests exercise real handler code with a substituted RPC; Python verifies a Node-generated RSA-PSS response through the real Windows CNG verifier and rejects a tampered response.
+- Prepared project `zwjhjfgoiofbiyguhcbx`: private PostgreSQL schema/admin functions, backend-only RPC, row locks for seat assignment, hashed codes/tokens, transactional denial counters, and a TypeScript Edge Function with code/token authorization instead of customer Auth accounts. Admin operations are not public routes. Current and legacy server-side Supabase keys are supported without placing keys in the desktop app.
+- PASS: public dashboard bundle matches modular sources; no external module dependencies are required. Missing signing material fails before seat assignment; service errors expose only safe STC codes. Failed live setup cannot provision the desktop public key. The unverified build remains blocked from packaging.
+- Prepared private signing material locally in an ignored directory; no key values were printed or added to the public function. The desktop endpoint is set but its trusted key remains unconfigured until the live activation/validation/second-seat rejection test succeeds.
+- NOT RUN: remote SQL migration/transaction tests, deployed Deno function and real Supabase activation. No authenticated Supabase management access, local Postgres, Deno or Supabase CLI is available here. The supplied project URL alone cannot authorize deployment. `SUPABASE_SETUP.md` gives dashboard steps and `supabase/tests/licensing.sql` rolls back temporary test changes.
+- Existing EXE SHA-256 unchanged: `01e259e9540517130ad35ec27a1a03cc6dccf36e10a1b43471d897018a121ae8`. No EXE build or release publication was performed.
+
+## STC UNIC CODE licensing development - 14 November 2026
+
+- PASS: 86 tests, including 18 licensing checks for atomic first activation, rejection of another PC/account, token rotation, revocation, expiry, transfer with a replacement code, private hashed storage, rate limits, malformed requests, missing/corrupt/copied credentials, TLS configuration requirements, RSA-PSS signatures, wrong keys, changed payloads, stale challenges and expiry, bilingual UI, and a gated startup that does not construct the workbench when verification fails.
+- PASS: real Windows DPAPI round trip and corrupted-data rejection; stable hashed Windows identity; Windows CNG verification of server signatures. The client adds no third-party runtime dependency. Cryptography is server/test tooling only.
+- PASS: separate source-launch integration over locally trusted HTTPS with a real licensing server, signed activation response and DPAPI credential. Startup first acknowledged the saved checkpoint in memory while the workbench was inaccessible; activation then opened the workspace, restored the dataset/notebook, and wrote the normal restored health acknowledgement. This used isolated temporary settings/data, not the production license location.
+- PASS: release preparation refuses missing endpoint/key before writing an archive. Public-only client provisioning contains no server secrets. A local HTTP integration verified that activation/validation work and admin/issue/transfer routes are unavailable remotely.
+- Rendered and inspected English/French activation screens with STC branding and the supplied LinkedIn purchase/help link. Content scrolls on smaller windows.
+- NOT DEPLOYED: no production HTTPS service, signing key or real buyer codes have been provisioned; Docker deployment instructions are prepared but have not been run on a production host. Existing EXE/release files were not rebuilt, changed or published.
+- LIMITS: one seat means one PC and Windows account, not verified human identity. Tests simulate a different device fingerprint and verify local encryption; a separate physical second PC/account was not available. Source tampering, old unlicensed builds and full Windows clones remain outside this protection. Online validation occurs at startup; active sessions are not forcibly interrupted.
+
+## General interface review (0.5.5) — 14 November 2026
+
+- PASS: 68 tests completed with exit code 0. Review checks cover bilingual update guidance, inactive update downloads before a release check, accurate project/export wording, dataset naming, safe import failure, method-specific analysis fields, distinct numeric geology defaults, empty report guidance, reload availability and exact release-tag case.
+- PASS: project round trips now preserve correlation method, chart type and report-content flags. Statistical options and selected controls mark the project as changed. Update recovery retains the saved dirty state after restoring controls.
+- Corrected closing prompts to refer to projects; clarified notebook code import and Word/Excel exports; removed obsolete manual update instructions. The normal Updates help describes in-app download, automatic saving and restart; legacy download-page guidance appears only for legacy releases.
+- File-operation errors use friendly localized messages and support codes while diagnostic details remain local. User-written Python errors remain available in notebook results.
+- Report builder labels now describe applying a selection, empty reports explain the next action and outdated comments are not assigned to changed results. Advanced analysis ignores irrelevant fields; geology selectors start with distinct numeric columns.
+- Rendered all workspace pages and inspected Data, Exports, Geology and Updates at 1350 × 738 in the reviewed English/French states. The application style and EXE were retained.
+- Prepared the application-only patch for exact tag V0.5.5 (capital V), with compatible source versions 0.5.1–0.5.4. The builder now accepts an explicit tag to avoid case mismatches.
+
+## Project filename update (same 0.5.4 package)
+
+- New public project saves use .stcp. Older .stcproj and .stcproject files remain readable and save to .stcp without stacking suffixes or overwriting the legacy original.
+- PASS: 22 focused project, statistics and update checks, including a real save/reopen and migration of both legacy suffixes with byte-identical originals retained.
+- Internal updater checkpoints keep their existing filename contract for compatibility with earlier installer/recovery code. The refreshed 0.5.4 ZIP and feed must be uploaded together; the EXE is unchanged.
+
+## Customer-facing updater messages (0.5.4) — 14 November 2026
+
+- PASS: 58 tests completed with exit code 0. Added checks ensure technical release notes never reach the app, public summaries follow English/French selection, raw exceptions/paths/URLs are hidden, support codes match update stages and diagnostic details remain in local logs.
+- PASS: logging failures do not interrupt the user-facing error path. Update logs rotate locally; no automatic diagnostic upload was added.
+- Update errors now display friendly text plus STC-Uxxx codes. Release notes render only customer-facing user_notes, with a localized fallback for legacy feeds. Internal update-checkpoint paths no longer appear in the status bar.
+- Prepared v0.5.4 application-only update assets compatible with 0.5.1, 0.5.2 and 0.5.3. The original EXE is unchanged; publishing remains a separate user action.
+
 ## GitHub release-check repair — 14 November 2026
 
 - Reproduced the redirect regression: QUrl's default PrettyDecoded string introduces a literal space from GitHub's percent-encoded response-content-disposition query. The old validator rejects it; FullyEncoded preserves the valid HTTPS URL.

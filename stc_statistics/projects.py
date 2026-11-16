@@ -9,11 +9,24 @@ import pandas as pd
 import nbformat
 
 
+def project_filename(path):
+    """Use the public .stcp suffix without stacking it on a legacy suffix."""
+    path = str(path)
+    suffix = Path(path).suffix.lower()
+    if suffix == '.stcp':
+        return path
+    if suffix in ('.stcproj', '.stcproject'):
+        return str(Path(path).with_suffix('.stcp'))
+    return path + '.stcp'
+
+
 def save_project(path, frame, notebook, settings):
     payload = {'format': 'STC Statistics', 'version': 1, 'settings': settings,
                'notebook': json.loads(nbformat.writes(notebook))}
     encoded = json.dumps(payload, ensure_ascii=False).encode('utf-8')
     data = frame.to_parquet(index=True) if frame is not None else None
+    if len(encoded)>64*1024**2 or (data is not None and len(data)>512*1024**2):
+        raise ValueError('Project exceeds the supported size; clear old outputs or reduce saved results / Projet trop volumineux : effacez les anciennes sorties ou réduisez les résultats')
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(dir=Path(path).parent, suffix='.stcproj', delete=False) as f:

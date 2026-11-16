@@ -161,4 +161,5 @@ class ChartViewer(QWidget):
                 with open(path, 'wb') as target:
                     target.write(self.images[index])
             except OSError as exc:
-                QMessageBox.warning(self, self.app.t('error'), str(exc))
+                from .feedback import show_error
+                show_error(self.app,'export',exc)

@@ -1,6 +1,21 @@
 # In-app updates through GitHub Releases
 
+## Current release: v1.0.1
+
+Publish a normal GitHub Release with the exact tag **v1.0.1** and attach these two matching files:
+
+- `releases/1.0.1/STC_Statistics_1.0.1_Update.zip`
+- `releases/1.0.1/update.json`
+
+Upload both assets before publishing. Their names and the tag case must match the URL inside the JSON. Existing 0.5.6 setup customers use Updates → Check for updates → Update app. This release changes application code only and keeps their bundled interpreter, libraries and activation. No new EXE or installer was rebuilt. See [V1_RELEASE.md](V1_RELEASE.md) for the feature scope and validation limits.
+
+Version 1.0.1 adds preview-based decimal-comma preparation to Map Studio/3D Studio and actionable numeric-selection validation (STC-SCI102). It supports the existing 1.0.0 application plus compatible 0.5.1–0.5.6 patch updaters. The 1.0.0 assets are retained unchanged. The instructions below include historical bootstrap/test releases; do not publish those old versions instead of v1.0.1.
+
+**0.5.6 licensing update:** Supabase activation has been deployed and the developer's live verification passed (signed activation, saved-token validation and second-seat rejection). The desktop public key is provisioned. The application-only release candidate is in `releases/0.5.6/`; publish with the exact tag `v0.5.6` and attach both the update ZIP and `update.json`. Have a valid STC UNIC CODE ready before installing. Customers need internet at startup and no Supabase account. Existing EXEs are unchanged. See [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for code administration and [LICENSING.md](LICENSING.md) for protection limits. A physical second-PC test is still recommended before customer rollout.
+
 Repository: https://github.com/SystemTechnologiesCompany/STC-Statistics
+
+New-customer setup: attach `dist/setup/STC_Statistics_0.5.6_Setup.exe` to release `v0.5.6`. Keep the existing application-patch ZIP and `update.json` for in-app updates. The setup checksum JSON is a separate metadata file and must not replace `update.json`. See [WINDOWS_SETUP.md](WINDOWS_SETUP.md).
 
 The existing EXE remains the original 0.5.0 binary. Application code updates independently inside its extracted private runtime; no EXE rebuild is needed.
 
@@ -57,6 +72,16 @@ Publish the corrected assets from releases/0.5.3 as a normal latest **v0.5.3** r
 Arbitrary live Python variables outside df are not serialized; rerun their notebook cells after restarting. This patch format keeps the same bundled Python and third-party libraries. Changes requiring new dependencies need a separate runtime update design. Backups are deliberately retained; no automatic deletion of user data is performed.
 
 ## Build later updates
+
+The general-review release is **V0.5.5** (capital V). Upload releases/0.5.5/STC_Statistics_0.5.5_Update.zip and releases/0.5.5/update.json together. The patch supports installed versions 0.5.1 through 0.5.4. The release tag must match the case in the generated download URL. The publisher accepts --tag when you want to choose the tag explicitly.
+
+The Updates help now describes the in-app process; customer instructions do not require manual ZIP extraction or setup scripts. File-operation support codes use STC-Fxxx, input/session issues use STC-Axxx and dataset refresh issues use STC-D101. Technical diagnostics remain local.
+
+Customer messaging policy (0.5.4 and later): the app renders only user_notes.en / user_notes.fr, with a friendly generic fallback for old release feeds. Technical legacy release_notes are never shown in the product. Use --public-notes-en and --public-notes-fr to describe user benefits. Update failures display a friendly localized explanation plus a stable STC-Uxxx support code; full details remain in bounded local logs/update-diagnostics.log under the runtime home. No diagnostic logs are uploaded automatically.
+
+Support codes: STC-U101 (checking connection), STC-U102 (release information), STC-U201 (download), STC-U202 (verification), STC-U301 (workspace saving), STC-U401 (installation), STC-U402 (update preparation). Cancellation is not reported as an error.
+
+The prepared customer-messaging release is v0.5.4: publish releases/0.5.4/STC_Statistics_0.5.4_Update.zip and releases/0.5.4/update.json. Installed versions 0.5.1, 0.5.2 and 0.5.3 are supported. No activation or EXE rebuild is required for an already working 0.5.3 updater.
 
 ~~~powershell
 .venv\Scripts\python.exe make_patch.py --version 0.5.3 --from-version 0.5.2 --output releases\0.5.3 --notes "Describe the changes"

@@ -19,11 +19,13 @@ def main():
         parser.error('Both URLs must be public HTTPS addresses.')
     version_tuple(APP_VERSION)
     root = Path(__file__).resolve().parent
+    from stc_statistics.licensing import require_configured_release
+    require_configured_release(root)
     destination = root / 'releases'
     destination.mkdir(exist_ok=True)
     archive_path = destination / f"STC_Statistics_{APP_VERSION}{'_Windows' if args.windows_exe else ''}.zip"
     names = ['main.py', 'make_release.py', 'requirements.txt', 'README.md', 'Setup.cmd', 'Setup.ps1', 'Start.cmd']
-    files = [root / name for name in names] + list((root / 'stc_statistics').glob('*.py')) + list((root / 'stc_statistics' / 'assets').glob('*'))
+    files = [root / name for name in names] + list((root / 'stc_statistics').glob('*.py')) + list((root / 'stc_statistics').glob('*.json')) + list((root / 'stc_statistics' / 'assets').glob('*'))
     with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_DEFLATED) as archive:
         if args.windows_exe:
             exe = root / 'dist' / 'STC Statistics.exe'
@@ -37,7 +39,8 @@ def main():
             archive.write(root / 'packaging' / 'README_Windows.txt', 'README.txt')
         else:
             for file in files:
-                archive.write(file, file.relative_to(root).as_posix())
+                if file.name!='update_config.json':
+                    archive.write(file, file.relative_to(root).as_posix())
             archive.writestr('stc_statistics/update_config.json', json.dumps({'manifest_url': args.feed_url, 'download_url': args.download_url}, indent=2))
     manifest = {'version': APP_VERSION, 'download_url': args.download_url, 'release_notes': args.notes,
                 'sha256': hashlib.sha256(archive_path.read_bytes()).hexdigest()}

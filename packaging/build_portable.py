@@ -10,6 +10,8 @@ import zipfile
 root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root))
 from stc_statistics.version import APP_VERSION
+from stc_statistics.licensing import require_configured_release
+require_configured_release(root)
 
 output = root / 'dist'
 output.mkdir(exist_ok=True)

@@ -8,3 +8,13 @@ __pycache__/
 releases/
 build/
 dist/
+.licensing_private/
+licensing_data/
+.env
+.env.*
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.pem
+pepper.key

@@ -1,0 +1,38 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: licensing_server/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - license_data:/data
+    networks:
+      licensing:
+        ipv4_address: 172.29.60.3
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    pids_limit: 128
+    mem_limit: 512m
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      - LICENSE_DOMAIN=${LICENSE_DOMAIN:?Set LICENSE_DOMAIN to your licensing hostname}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      licensing:
+        ipv4_address: 172.29.60.2
+networks:
+  licensing:
+    ipam:
+      config:
+        - subnet: 172.29.60.0/24
+volumes:
+  license_data:
+  caddy_data:
+  caddy_config:

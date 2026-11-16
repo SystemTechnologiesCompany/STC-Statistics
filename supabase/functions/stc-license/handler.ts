@@ -1,0 +1,94 @@
+import {loadSigner,newToken,sha256} from './protocol.ts';
+
+type Env = (name: string) => string | undefined;
+type RPC = (body: Record<string, unknown>) => Promise<Record<string, unknown>>;
+
+function reply(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body),{status,headers:{
+    'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+}
+
+function adminKey(env: Env): string {
+  // Prefer current named secret keys; retain compatibility with existing projects.
+  const keys = JSON.parse(env('SUPABASE_SECRET_KEYS') || '{}');
+  const key = keys.default || env('STC_BACKEND_SECRET_KEY') || env('SUPABASE_SERVICE_ROLE_KEY');
+  if (typeof key!=='string' || !key) throw new Error('Missing backend configuration');
+  return key;
+}
+
+export function databaseRPC(env: Env, fetcher: typeof fetch = fetch): RPC {
+  return async body => {
+    const key = adminKey(env);
+    const headers: Record<string,string> = {'Content-Type':'application/json',apikey:key};
+    if (key.startsWith('eyJ')) headers.Authorization = 'Bearer '+key;
+    const result = await fetcher(env('SUPABASE_URL')+'/rest/v1/rpc/stc_license_access',{
+      method:'POST',headers,body:JSON.stringify(body),signal:AbortSignal.timeout(15000),redirect:'error'});
+    if (!result.ok) throw new Error('License database unavailable');
+    return await result.json();
+  };
+}
+
+async function boundedJSON(req: Request): Promise<unknown> {
+  if (!req.headers.get('content-type')?.toLowerCase().startsWith('application/json') || !req.body) throw new Error('Invalid request');
+  const reader=req.body.getReader();
+  const chunks: Uint8Array[]=[];
+  let size=0;
+  try {
+    while (true) {
+      const {value,done}=await reader.read();
+      if (done) break;
+      size+=value.length;
+      if (size>4096) { await reader.cancel(); throw new Error('Invalid request'); }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  const bytes=new Uint8Array(size);
+  let offset=0;
+  for (const chunk of chunks) { bytes.set(chunk,offset); offset+=chunk.length; }
+  return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));
+}
+
+export function createHandler(env: Env, rpc: RPC = databaseRPC(env)) {
+  let signer: ReturnType<typeof loadSigner> | undefined;
+  return async (req: Request): Promise<Response> => {
+    const path=new URL(req.url).pathname;
+    const route=path.startsWith('/stc-license/') ? path.slice('/stc-license'.length) : path.replace(/^\/functions\/v1\/stc-license(?=\/)/,'');
+    if (req.method==='GET' && route==='/health') return reply(200,{service:'STC licensing',status:'ok'});
+    if (req.method!=='POST' || !['/v1/activate','/v1/validate'].includes(route)) return reply(404,{code:'STC-L104'});
+    let body: Record<string,unknown>;
+    try {
+      const data=await boundedJSON(req);
+      if (!data || typeof data!=='object' || Array.isArray(data)) throw new Error('Invalid request');
+      body=data as Record<string,unknown>;
+      if (typeof body.device_id!=='string' || !/^[a-f0-9]{64}$/.test(body.device_id)
+          || typeof body.nonce!=='string' || !/^[a-f0-9]{48}$/.test(body.nonce)) throw new Error('Invalid request');
+    } catch { return reply(400,{code:'STC-L101'}); }
+    const operation=route.endsWith('/activate') ? 'activate' : 'validate';
+    let credential=body[operation==='activate' ? 'code' : 'token'];
+    if (typeof credential!=='string' || credential.length>160) return reply(400,{code:'STC-L101'});
+    if (operation==='activate') credential=credential.trim().toUpperCase();
+    if (operation==='activate' ? !/^STC-(?:[A-Z2-7]{8}-){3}[A-Z2-7]{8}$/.test(credential)
+                             : !/^[A-Za-z0-9_-]{43}$/.test(credential)) return reply(401,{code:'STC-L101'});
+    try {
+      // Load/validate signing material before the database binds a seat.
+      const sign=await (signer ??= loadSigner(env('STC_LICENSE_SIGNING_KEY') || ''));
+      const token=operation==='activate' ? newToken() : null;
+      const result=await rpc({p_operation:operation,p_credential_hash:await sha256(credential),
+                            p_device:body.device_id,p_token_hash:token ? await sha256(token) : null});
+      if (result.status!==200) {
+        const allowed: Record<string,number> = {'STC-L101':401,'STC-L102':409,'STC-L103':403,'STC-L106':429};
+        const code=typeof result.code==='string' && result.code in allowed ? result.code : 'STC-L104';
+        return reply(allowed[code] || 503,{code});
+      }
+      if (typeof result.license_id!=='string' || !/^[0-9a-f-]{36}$/.test(result.license_id)) throw new Error('Invalid result');
+      const now=Math.floor(Date.now()/1000);
+      const payload: Record<string,unknown> = {type:'stc-license-access-v1',active:true,
+        license_id:result.license_id,device_id:body.device_id,nonce:body.nonce,issued_at:now,expires_at:now+300};
+      if (token) payload.token=token;
+      return reply(200,await sign(payload));
+    } catch {
+      signer=undefined; // Allows a corrected server secret to take effect on retry.
+      return reply(503,{code:'STC-L104'});
+    }
+  };
+}

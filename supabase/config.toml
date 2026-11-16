@@ -1,0 +1,6 @@
+project_id = "zwjhjfgoiofbiyguhcbx"
+
+# Customers authenticate with their license code/token, not Supabase Auth.
+# Only this dedicated endpoint is public; admin database operations stay private.
+[functions.stc-license]
+verify_jwt = false

@@ -49,9 +49,12 @@ def choose_statistics(app):
             if not chosen and not values:
                 raise ValueError()
         except ValueError:
-            QMessageBox.warning(dialog, app.t('error'), app.t('invalid_percentiles'))
+            QMessageBox.warning(dialog, app.t('action_failed'), app.t('invalid_percentiles'))
             return
-        app.stats_metrics, app.stats_ddof, app.stats_percentiles = chosen, convention.currentData(), values
+        updated=(chosen,convention.currentData(),values)
+        if updated!=(app.stats_metrics,app.stats_ddof,app.stats_percentiles):
+            app.mark_dirty()
+        app.stats_metrics, app.stats_ddof, app.stats_percentiles = updated
         dialog.accept()
 
     apply.clicked.connect(commit)
